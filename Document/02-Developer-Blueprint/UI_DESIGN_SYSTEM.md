@@ -17,7 +17,7 @@
 > RTM rule (13 สิงหาคม 2026): หน้า RTM ต้องอ้างอิง Project/Release ที่ผู้ใช้เลือก, แสดง KPI Covered/Partial/Not Covered, กรอง Module/Requirement Status/Coverage ได้, เปิดดู Requirement และ Test Case แบบ read-only modal, จัดการ Direct/Indirect Link ตามสิทธิ์, Export CSV และเปลี่ยนตารางเป็น card บน Mobile
 
 > สถานะ: **UI Single Source of Truth**
-> อัปเดตล่าสุด: 13 สิงหาคม 2026
+> อัปเดตล่าสุด: 25 กันยายน 2026
 > ขอบเขต: Web frontend ทั้งหมดใน `src/ProMaxx2.QA.Web`
 
 เอกสารนี้เป็นหลักสำหรับการออกแบบ สร้าง และแก้ไข UI ทุกหน้า หากโค้ดเดิมไม่สอดคล้องกับเอกสารนี้ ให้ปรับโค้ดเข้าหาเอกสาร เว้นแต่ requirement ใหม่ระบุเป็นอย่างอื่นอย่างชัดเจน ทุกครั้งที่มีการเปลี่ยนแปลง UI ต้องอัปเดตหัวข้อที่เกี่ยวข้องและ Change Log ในไฟล์นี้ในงานเดียวกัน
@@ -33,11 +33,10 @@
 ## 2. Technology และไฟล์หลัก
 
 - Framework: React + TypeScript + Vite
-- Component หลัก: `src/ProMaxx2.QA.Web/src/App.tsx`
+- App shell: `src/ProMaxx2.QA.Web/src/App.tsx`; แต่ละหน้าอยู่ใน `src/pages/<ชื่อหน้า>.tsx` (โหลดแบบ `React.lazy` — ระหว่างโหลดแสดง `pageLoading`), ของที่ใช้ร่วมอยู่ใน `src/shared/` และ component กลางใน `src/components/` (`ModalShell`, `Badge`, `DialogHost`)
 - Global design system: `src/ProMaxx2.QA.Web/src/styles.css`
 - Test Case และ Test Step UI: `src/ProMaxx2.QA.Web/src/TestManagement.css`
-- Stylesheet เฉพาะหน้า: `App.css`, `Dashboard.css`, `DashboardExecutive.css`, `DragDrop.css`, `ReleaseBuild.css`
-- ห้ามเพิ่ม style ใหม่ใน `Login.css`; ไฟล์นี้เป็น legacy และไม่ได้เป็น stylesheet หลักของแอป
+- Stylesheet เฉพาะหน้า: `App.css`, `Dashboard.css`, `DashboardExecutive.css`, `DragDrop.css`, `ReleaseBuild.css`, `Automation.css`, `Regression.css`, `Rtm.css`, `MyWork.css` ฯลฯ — stylesheet ของหน้าที่อยู่ใน `src/pages/` ให้ import ในไฟล์หน้านั้น (โหลดพร้อม chunk ของหน้า) และ selector ต้อง scope ด้วย class ของหน้าเพื่อไม่ให้ขึ้นกับลำดับการโหลด
 
 ลำดับตรวจสอบหลังแก้ UI:
 
@@ -61,6 +60,8 @@ git diff --check
 | `--green` | `#169c63` | Pass/Success |
 | `--yellow` | `#d79a00` | Warning/Pending/Blocked |
 | `--red` | `#d64545` | Fail/Danger/Delete |
+| `--warning-text` | `#9a6d00` | ข้อความ/ไอคอนสถานะ Warning/Blocked บนพื้นเหลืองอ่อน (contrast ผ่านกว่า `--yellow`) |
+| `--info` | `#2563eb` | ข้อความสถานะ In Progress/Informational |
 
 หลักการทั่วไป:
 
@@ -68,7 +69,9 @@ git diff --check
 - Border radius ของ card/modal: 14–16px
 - Focus ring: primary โปร่งใส 10–20% ขนาด 3px
 - Card shadow ต้องเบา ไม่บดบังเส้นแบ่งข้อมูล
-- Font หลัก: `Tahoma, "Noto Sans Thai", Arial, sans-serif`
+- Font หลัก: `"Kanit", Tahoma, "Noto Sans Thai", Arial, sans-serif` (Kanit โหลดจาก Google Fonts ใน `index.html`); PDF ที่สร้างฝั่ง client ใช้ `Tahoma, "Noto Sans Thai", Arial`
+- **ขนาดตัวอักษรขั้นต่ำ 11px** สำหรับข้อความทุกชนิด (รวม label/metadata/หัวข้อ card บน Mobile) — ยกเว้นเฉพาะ glyph ตกแต่งใน `::before`/`::after` ที่ไม่ใช่ข้อความ
+- **ห้ามเขียน hex ที่ซ้ำกับค่า token** — ใช้ `var(--primary)`, `var(--muted)` ฯลฯ แทน (สีที่ยังไม่มี token ใช้ hex ได้ แต่ถ้าใช้ซ้ำหลายหน้าให้เพิ่ม token ในตารางนี้ก่อน); สีใน `url(data:...)`, canvas และ PDF ใช้ hex ได้เพราะ `var()` ใช้ไม่ได้ในบริบทนั้น
 
 ## 4. Application Shell
 
@@ -94,13 +97,14 @@ git diff --check
 | Execution | Defect | Table และ create/edit defect form |
 | Execution | Regression | Regression overview |
 | Execution | Automation | Dashboard, Automation Cases (DSL/Version/Validate/Approve/Run), Action Library, Object Repository, Agents, Execution Queue/History/Evidence |
+| Execution | CRM | Per-user read-only work queue, connection state, KPI, filter and responsive ticket list |
 | Governance | Test Summary | Reporting summary |
 | Governance | Risk Acceptance | Risk review/approval |
 | Governance | Release Sign-off | Gate และ sign-off |
 | Administration | User / Role | User, role และ permission grid |
 | Administration | การตั้งค่ากลาง | Master data และ Environment ที่จัดเก็บในฐานข้อมูล |
 | Administration | System Monitor | API/Database health, allowlisted Windows Service status และ privileged Start/Restart actions |
-| Administration | Audit Log | Audit table/filter |
+| Administration | Audit Log | Activity overview, search/entity filter, desktop table, mobile cards และ read-only detail |
 
 ## 6. Card, Table และ Status
 
@@ -116,6 +120,7 @@ git diff --check
 - Cell ต้องไม่หนาแน่นเกินไป; padding ประมาณ 10–12px
 - Action ของ row อยู่คอลัมน์ขวาสุด
 - ข้อมูลที่ยาวใช้ ellipsis หรือ wrap ตามความเหมาะสม
+- **Mobile (≤760px):** ตารางหลายคอลัมน์ต้องเปลี่ยนเป็น card — ใส่ class `table-cards` ที่ `<table>` แล้วแต่ละแถวจะเป็น card ที่มีหัวข้อคอลัมน์ทางซ้าย (34%) และค่าทางขวา; `data-label` ของทุก cell ถูกเติมอัตโนมัติจาก `<th>` (`src/components/tableCardLabels.ts`) — ใส่ `data-label` เองได้ถ้าต้องการข้อความต่างจากหัวตาราง, cell ที่กินทั้งแถวไม่มีหัวข้อ; โหมด card ยกเลิกความกว้าง/nowrap รายคอลัมน์ทั้งหมดเพื่อไม่ให้เกิด horizontal scroll
 
 ### Badge และสถานะ
 
@@ -123,6 +128,7 @@ git diff --check
 - Fail/Critical/Danger: แดง
 - Pending/Blocked/Draft: เหลือง
 - Informational/Code/Count: น้ำเงิน
+- Testing/รอทดสอบ: ม่วง (`.badge.purple` ใน styles.css ใช้ได้ทุกหน้า: พื้น `#ede9fe` ตัวอักษร `#6d28d9`) — ใช้เมื่อต้องแยกจากสถานะกำลังดำเนินการสีน้ำเงิน เช่น CRM `Test` vs `Continue`
 - Badge ต้องไม่ wrap และต้องมีข้อความ ไม่สื่อด้วยสีอย่างเดียว
 
 ## 7. Form Controls
@@ -176,6 +182,8 @@ git diff --check
 - ความสูงสูงสุด 92vh และเลื่อนเฉพาะแนวตั้ง
 - ห้ามมี horizontal scrollbar
 - Pattern: `<div className="modal">` (backdrop, blur 6px, dark overlay) → `<div className="modal-box">` (white box, centered, 16px radius, strong shadow)
+- **ทุก modal ต้องใช้ `ModalShell` (`src/components/ModalShell.tsx`)** แทนการเขียน `.modal`/`.modal-box` เอง — ให้ `role="dialog"`, `aria-modal`, `aria-labelledby`/`aria-label`, focus ช่องแรกตอนเปิดและคืน focus ตอนปิด, Tab วนใน modal และ Escape ปิดเฉพาะ modal บนสุด
+- ข้อมูลที่ยังไม่บันทึก: `ModalShell` ถือว่า dirty เมื่อผู้ใช้พิมพ์/เลือกค่าใน modal (event `input`/`change`) หรือผู้เรียกส่ง `dirty` (เช่น AI draft ที่สร้างขึ้นเอง) — Escape ถามยืนยันก่อนปิด และคลิกพื้นหลังจะปิดได้เฉพาะตอนยังไม่ dirty; modal แสดง secret ครั้งเดียวใช้ `backdropDismiss={false}`
 - Header ใช้ `.modal-head` (border-bottom 2px, h2 20px/800, ปุ่ม close มี border)
 - Action footer ใช้ `.modal-actions` (border-top 2px, ปุ่ม primary มี shadow)
 - Form ใช้ grid 2 คอลัมน์เป็นค่าเริ่มต้น
@@ -227,7 +235,7 @@ git diff --check
 |---:|---|
 | 1450px | ลดความกว้าง execution columns |
 | 1100px | Execution history ลงแถวใหม่ |
-| 800px | App shell เป็น Mobile navigation |
+| 900px | App shell เป็น Tablet/Mobile navigation เพื่อรองรับ iPad แนวตั้ง |
 | 760px | Modal เต็มหน้าจอและ form stack |
 | 420px | Test Case compact fields เหลือหนึ่งคอลัมน์ |
 
@@ -240,6 +248,7 @@ git diff --check
 - Keyboard focus ต้องมองเห็นได้
 - ห้ามใช้สีเพียงอย่างเดียวในการบอกสถานะ
 - Confirm ก่อน operation ที่สร้าง historical record หรือลบข้อมูล
+- ห้ามใช้ `window.alert` / `window.confirm` / `window.prompt` — ใช้ `confirmDialog` / `promptDialog` / `notify` จาก `src/components/dialogStore.ts` (แสดงผลโดย `<DialogHost />` ที่ mount ใน `main.tsx`): กล่องยืนยันระบุผลที่จะเกิดขึ้นและใช้ `tone: "danger"` กับการลบ/ทิ้งข้อมูล; แจ้งผลสำเร็จ/ล้มเหลวที่ไม่ผูกกับฟอร์มใช้ toast (`notify(message, "success" | "error" | "info")`) ส่วน error ของฟอร์มยังแสดงใกล้ field/ใน modal
 - Loading และ disabled state ต้องป้องกันการ submit ซ้ำ
 - หน้าที่มี Workflow หลายขั้นตอนต้องจัดลำดับ section ตามขั้นตอนการทำงานจริง (งานหลักก่อนข้อมูลประกอบ) และใช้ Step Guide Strip แสดงสถานะ done/active พร้อม scroll-to-section — reference implementation `.regression-steps` ใน Regression.css
 - ข้อความไทยต้องบันทึกเป็น UTF-8 และห้ามมี mojibake
@@ -257,6 +266,292 @@ git diff --check
 7. เพิ่มรายการใน Change Log ด้านล่าง
 
 ## 15. Change Log
+
+### 2026-10-02 — หน้า Login ไม่ขึ้น toast 401 เมื่อ session หมดอายุ
+
+- แก้ toast "โหลดรายการ Project/Release/Build ไม่สำเร็จ (401) — ตัวเลือกอาจไม่ครบ" ซ้อนบนหน้า Login: เดิม `user` คืนค่าจาก `localStorage` ตอน render แรกแม้ token หมดอายุ แล้วค่อยล้างใน `useEffect` ทำให้ effect ของ Topbar ยิง API ไปก่อน — ตอนนี้ตรวจ `isTokenExpiredLocal()` ใน initializer ของ `user`
+- 401 จาก QA Hub API ขณะอยู่ที่ `/` (hash routing) ส่ง event `qa:session-expired` ให้ App กลับหน้า Login (เดิมล้าง token แต่ค้างอยู่ในแอป) และ `okJsonOrEmpty` ไม่ขึ้น toast เมื่อได้ 401; กฎ: **session หมดอายุให้พากลับหน้า Login เงียบ ๆ ห้ามแสดง toast error ต่อ request**
+
+### 2026-10-01 — หน้าแชร์ไม่โหลดข้อมูล Topbar
+
+- แก้ toast "โหลดรายการ Release/Build ไม่สำเร็จ (401)" บนหน้าแชร์ Defect/Dashboard: App shell โหลด Release/Build/Blocker ของ Topbar จาก `contextProjectId` ที่คืนค่าจาก `localStorage` แม้ไม่ได้ login — ตอนนี้โหลดเฉพาะเมื่อ login แล้วและไม่ใช่หน้าแชร์ (`contextEnabled` ใน App.tsx); กฎ: **หน้าแชร์/หน้าที่ไม่ต้อง login ห้ามยิง API ที่ต้องใช้ token**
+
+### 2026-09-30 — ขั้นตอนการทำซ้ำแบบการ์ด (Defect detail + หน้าแชร์)
+
+- Component กลาง `ReproSteps` (`src/components/ReproSteps.tsx`) + parser `parseReproSteps` (`src/shared/defects.ts`) สำหรับรูปแบบ `1. การกระทำ (Pass/Fail) | ข้อมูล: … | คาดหวัง: … | [หมายเหตุ]`: การ์ดต่อขั้น มีเลขวงกลม, ชื่อการกระทำตัวหนา, Badge Pass/Fail ชิดขวา, แถบซ้ายสีตามผล (Fail แดง + พื้นแดงอ่อน, Pass เขียว)
+- ส่วน `ป้าย: ค่า` แยกบรรทัดเป็นตาราง 2 คอลัมน์ (ป้าย 76px สี muted 11px / ค่า 13px); ≤760px ป้ายซ้อนเหนือค่า; หมายเหตุใน `[ ]` เป็นป้ายเล็ก และไม่แสดง "[ขั้นนี้ล้มเหลว]" ซ้ำกับ Badge Fail; ข้อความที่ไม่ตรงรูปแบบยังแสดงเป็นข้อความธรรมดา
+- หน้าแชร์: "รายละเอียด" แสดงบรรทัด `ป้าย: ค่า` โดยป้ายเป็นตัวหนาเหมือนหน้า Defect detail
+- หน้าแชร์: ค่า "CRM Ticket" เป็นลิงก์ (`.shared-defect-link` สี primary + ไอคอน `open_in_new`) เปิดหน้า Ticket ใน BlueSea แท็บใหม่ URL เดียวกับหน้า Defect detail
+- ตรวจที่ 1160px และ iframe 390px (`scrollWidth` = `clientWidth`)
+
+### 2026-09-30 — คอมเมนต์ Defect พร้อมรูป และ ImageLightbox
+
+- Component กลางใหม่: `ImageLightbox` (`src/components/ImageLightbox.tsx`) — ดูรูปขนาดใหญ่บนพื้นเข้ม, ปุ่ม ‹ › + ลูกศรคีย์บอร์ด + ปัดซ้าย/ขวาบนมือถือ, ตัวนับ `n / N`, เปิดรูปต้นฉบับในแท็บใหม่ และแถบรูปย่อด้านล่าง (`aria-current`); ใช้ `ModalShell` จึงปิดด้วย Escape/✕/คลิกพื้นหลัง; Mobile ≤760px เต็มจอ `100dvh` + safe-area — **ที่ใดแสดงชุดรูปให้คลิกดูขนาดใหญ่ต้องใช้ component นี้**
+- `DefectCommentList` / `DefectCommentComposer` (`src/components/DefectComments.tsx`) ใช้ทั้งหน้า Defect detail และหน้าแชร์ `?d=`: คอมเมนต์เรียงเก่า → ใหม่ มี avatar ตัวย่อ ชื่อ เวลา (พ.ศ.) ข้อความ `pre-wrap` และรูปย่อ 72px (Mobile 64px) ด้านล่าง คลิกแล้วเปิด lightbox ของรูปชุดในคอมเมนต์นั้น; ข้อความที่ sync จาก CRM ใช้พื้นเหลืองอ่อน + ป้าย "จาก CRM"
+- ช่องเขียนคอมเมนต์: textarea + ปุ่ม "แนบรูป (n/5)" (PNG/JPG/WebP, รูปละ ≤ 5 MB, รวม ≤ 20 MB, วางรูปจากคลิปบอร์ดได้), รูปที่จะแนบแสดงเป็นรูปย่อพร้อมปุ่ม × , ส่งได้เมื่อมีข้อความหรือรูป, Ctrl/⌘ + Enter ส่ง, error แสดงใต้ช่อง; หน้าแชร์อ่านอย่างเดียว (ไม่มีช่องเขียน)
+- หน้า Defect detail: section "Comments" แยกจาก "Activities" (Activities ไม่แสดงคอมเมนต์ซ้ำ); รูปโหลดผ่าน `useAuthedAttachmentUrls` (blob URL พร้อม token) ส่วนหน้าแชร์ใช้ URL anonymous ตรง; รูปประกอบ Defect บนหน้าแชร์เปิดด้วย lightbox เช่นกัน
+- ตรวจหน้าแชร์ที่ 1440px และ iframe 390px จริง (`scrollWidth` = `clientWidth`) รวมสถานะ lightbox เปิดและกดเลื่อนรูป
+
+### 2026-09-30 — ลิงก์แชร์ Defect แบบอ่านอย่างเดียว (จาก CRM ticket)
+
+- เพิ่มหน้า `/?d=<code>` (short code สุ่ม 8 ตัวพิมพ์เล็ก เก็บในตาราง `DefectShareLinks`; `?defectShare=<token>` แบบยาวรุ่นแรกยังเปิดได้) (`src/pages/SharedDefectPage.tsx` + `SharedDefect.css`) เปิดได้โดยไม่ต้อง login ใช้ shell `.shared-dashboard` เดียวกับ Dashboard ที่แชร์ (modifier `.shared-defect-shell` จำกัดเนื้อหา 960px) และ render ก่อนหน้า Login
+- แสดง Code/Severity/Status (Badge มีข้อความ), Title, metadata (Project/Module/Release/Build/ผู้แจ้ง/ผู้รับผิดชอบ/CRM Ticket/วันที่ พ.ศ. ผ่าน `fmtDateTimeBE`), รายละเอียด/ขั้นตอน/ผลที่คาดหวัง/ผลจริง (`white-space: pre-wrap`), Test Case ที่เกี่ยวข้อง และรูปแนบ (คลิกเปิดขนาดเต็ม, มี `aria-label`) — ไม่แสดงคอมเมนต์/ประวัติภายใน
+- สถานะ loading (`role="status"`) และ error แยก "ลิงก์ไม่ถูกต้อง/ถูกลบ" (404) กับ "โหลดไม่สำเร็จ" (`role="alert"`)
+- Responsive: metadata auto-fill ≥200px → 2 คอลัมน์ ≤760px → 1 คอลัมน์ ≤420px, รูป 2 คอลัมน์บน Mobile; ตรวจที่ 1440px และ 390px (iframe กว้าง 390px จริง: `scrollWidth` = `clientWidth`)
+- 401 จาก `/shared/defects` ไม่ล้าง session (เหมือน `/dashboard/shared`) และหน้าแชร์ไม่เขียน `qa.activePage`/hash
+
+### 2026-09-25 — แยก App.tsx เป็นหน้าละไฟล์
+
+- ย้ายทุกหน้าที่เหลือ 15 หน้า (Dashboard, Defect, Project, Release, Requirement, RTM, Test Case, Test Suite, Test Cycle, Execution Workspace, Regression, My Work, User/Role, การตั้งค่ากลาง, System Monitor) ไป `src/pages/` แบบ `React.lazy`; App.tsx เหลือ ~1,070 บรรทัด (shell, context selector, routing, Login)
+- ของที่หลายหน้าใช้ร่วมย้ายไป `src/shared/appShared.tsx` โดยใช้ TypeScript AST หาการอ้างอิงจริง — โค้ดของแต่ละหน้าไม่ได้แก้ logic มีแค่ย้ายไฟล์และเพิ่ม import/export
+- ระหว่างโหลด chunk ของหน้าแสดง "กำลังโหลดหน้า..." (`Suspense` ครอบทั้งส่วน routing และลิงก์ Dashboard ที่แชร์)
+- ไฟล์ JS หลักจาก 741 kB เหลือ 246 kB (gzip 172 → 75 kB) และ warning ขนาด chunk ของ Vite หายไป; ตรวจด้วย headless Edge ว่า import ได้ครบทั้ง 18 หน้าและหน้า Login render ได้
+
+### 2026-09-25 — UI รอบ 6: token, ขนาดตัวอักษร, ลบโค้ดที่ไม่ใช้ และเริ่มแยก App.tsx
+
+- **Design token:** แทน hex ที่มีค่าตรงกับ token ด้วย `var(--…)` ใน CSS 410 จุด (14 ไฟล์; ไม่แตะ `:root`, `url(...)`, canvas/PDF) — หน้าตาเหมือนเดิม แต่เปลี่ยน token แล้วมีผลทั้งแอป
+- **ขนาดตัวอักษร:** ข้อความที่เล็กกว่า 11px (8/9/10px ราว 160 จุด รวมหัวข้อคอลัมน์ของ card บน Mobile) ปรับเป็น 11px ตามกฎใหม่ §3; เว้น glyph ตกแต่งใน pseudo-element และจุดแจ้งเตือน `.bell`
+- **ลบโค้ดที่ไม่ใช้:** `WeightedAssignmentPreview.tsx`, `MyWorkDetailModal.tsx`, `Workload*.css` 5 ไฟล์ (ไม่มีใคร import), `LegacyMyWorkPage`, ตาราง mock ของ `DataPage` + `EmptyPage` + ข้อมูลตัวอย่าง (ทุกหน้ามีหน้าจริงแล้ว — Execution/Test Cycle/Test Suite route ตรงจาก App), CSS `.defect-table` บน Mobile และ CSS ของ My Work overview เดิม
+- **เริ่มแยก App.tsx** (10,281 → ~9,150 บรรทัด): ย้าย Test Summary, Risk Acceptance และ Release Sign-off ไป `src/pages/` แบบ `React.lazy` พร้อม stylesheet ของหน้า; ย้าย `Badge`, `defectAgeDays` และ type ที่ใช้ร่วม (`ProjectItem`, `ReleaseItem`, `BuildItem`, `DefectItem`, `UserLookup`) ไป `components/`/`shared/` — chunk หลักเล็กลงราว 100 kB แต่ยังเกิน 500 kB (ต้องแยกหน้าที่เหลือต่อ)
+
+### 2026-09-25 — UI รอบ 5: ตารางแบบ card บน Mobile
+
+- เพิ่ม pattern กลาง `table-cards` (styles.css) + `installTableCardLabels()` ใน `main.tsx` ที่เติม `data-label` จาก `<th>` ให้อัตโนมัติ (รวมแถวที่ render ภายหลัง) — ตารางไม่ต้องเขียน data-label ทีละ cell
+- ใช้กับ 25 ตารางที่เดิมบน Mobile ต้องเลื่อนแนวนอน: Defect (เดิม min-width 1180px และ CSS mobile ชี้ class ผิด `.defect-table`), Test Cycle, Build ใน Release, Regression automation preview, Risk Acceptance, ประวัติ Sign-off และทุกตารางในหน้า Automation (Cases, ผลรันล่าสุด, Wizard, Execution/Failure, Action/Object/Verification/Import, Agent heartbeat, Schedule, Build Trigger, Webhook token/delivery, Snapshot, Seed, Data Profile, Suite และ Suite cases)
+- ตรวจด้วย headless Edge ที่กรอบกว้าง 390px: `scrollWidth` = `clientWidth` (ไม่มี horizontal scroll), ข้อความยาวตัดบรรทัดใน card, ปุ่มหลายปุ่มอยู่แถวเดียวกัน
+
+### 2026-09-25 — UI รอบ 4: แยก error ออกจาก "ไม่มีข้อมูล" และยกเลิกคำขอเก่า
+
+- เพิ่ม `getJson(url, signal)` / `isAbortError` ใน `api.ts` (ไม่ OK = throw `ApiError`) และ `useDebounced` กลาง (`src/components/useDebounced.ts`, หน้า Automation re-export)
+- **Requirement:** โหลด RTM ไม่สำเร็จแจ้งว่า Coverage อาจต่ำกว่าความจริง (เดิมทุกแถว "ยังไม่มี Test Case"), ประวัติ Revision ที่โหลดไม่สำเร็จแสดง error (เดิม "ยังไม่มีประวัติ"), เปิดแก้ไขไม่สำเร็จแจ้ง toast (เดิมกดแล้วเงียบ), ตัวกรอง Project/Module/Release แจ้งเมื่อโหลดไม่สำเร็จ
+- **Test Cycle:** ช่องค้นหา debounce 300ms (เดิมยิง 6 คำขอต่อตัวอักษร), รายการและจำนวนตามสถานะยกเลิกคำขอเก่าด้วย AbortController, สถานะที่นับไม่สำเร็จไม่แสดง 0 ปลอม, โหลดข้อมูลตั้งต้นของฟอร์มไม่สำเร็จแสดง error
+- **Test Suite:** โหลดรายการไม่สำเร็จแสดง error; โหลดรายละเอียดไม่สำเร็จจะไม่เปิด detail/editor (เดิมแสดง 0 case และ editor อาจทำ case หายตอนบันทึก)
+- **Defect:** ประวัติกิจกรรม/Test Case ที่เชื่อมที่โหลดไม่สำเร็จแสดง error ใน detail; ตัวกรอง Module/ผู้ใช้แจ้งเมื่อโหลดไม่สำเร็จ
+- **Project / Release:** Module และ Build ตรวจผลก่อนใช้ (เดิม `data.filter` พังเมื่อ API error) และยกเลิกคำขอของรายการที่เลือกก่อนหน้า
+- **Test Summary / Risk / Dashboard / Execution Workspace / Regression:** โหลดข้อมูลหลักไม่สำเร็จแสดง error แทนหน้าว่าง; Dashboard/Workspace ยกเลิกคำขอเก่าเมื่อเปลี่ยนบริบท; Regression ไม่ให้ผลของ Release ก่อนหน้ามาทับ
+- dropdown ตั้งต้น (Master Settings, Project/Release/Build บน Topbar, Module ในฟอร์ม Test Cycle) ยังคงว่างเมื่อโหลดไม่สำเร็จแต่แจ้ง toast (`okJsonOrEmpty`)
+
+### 2026-09-24 — UI รอบ 3: กล่องยืนยันและแจ้งผลแบบกลาง
+
+- เพิ่ม `confirmDialog` / `promptDialog` / `notify` (`src/components/dialogStore.ts`) + `DialogHost` (ใช้ `ModalShell` จึงได้ Escape/focus/Tab ครบ) และแทน `window.confirm` 39 จุด, `window.alert` 49 จุด (เป็น toast แยกสี success/error), `window.prompt` 2 จุดทั้งแอป — toast อยู่มุมขวาล่าง (Mobile เต็มความกว้าง), error ค้าง 9 วินาที, success 5 วินาที, มีปุ่มปิดและ `role="alert"`/`status`
+- กล่องยืนยันปิด modal ที่มีข้อมูลค้าง (ModalShell) เปลี่ยนจาก `window.confirm` เป็นกล่องของระบบ ("ปิดหน้าต่าง" / "กลับไปแก้ไข")
+- เพิ่มการยืนยันที่ขาด: ปิด Defect (Quick Close) และเปลี่ยนสถานะ Defect หลายรายการ, Mark RC, เปลี่ยน Test Cycle เป็น Closed/Cancelled/Completed และเปลี่ยนสถานะหลาย Cycle, นำ Test Case ออกจาก Suite, ปิดใช้งานผู้ใช้, Regenerate ข้อความสรุปที่แก้ไว้ใน Test Summary, ปุ่มลัด P/F/B ใน Execution Workspace (ให้ตรงกับปุ่ม "ตั้งทุก Step"), อนุมัติ Automation Version และยกเลิก Quarantine
+- Quick status / เปลี่ยนสถานะหลายรายการของ Defect และ Mark RC แจ้ง error เมื่อไม่สำเร็จ (เดิมเงียบ)
+
+### 2026-09-24 — UI รอบ 2: Modal มาตรฐานทั้งแอป
+
+- ย้าย `ModalShell` จากหน้า Automation ไปเป็น component กลาง `src/components/ModalShell.tsx` และเปลี่ยน modal ใน `App.tsx` ทั้ง 38 จุด + Audit Log เป็น `ModalShell` — ได้ Escape (เฉพาะบนสุด), focus เข้า/คืน, Tab trap, role/aria ครบทุก modal
+- เลิกใช้ flag `form` (เดิมหน้า Automation ถามยืนยันทุกครั้งที่กด Escape แม้ยังไม่ได้กรอก): ตรวจ dirty จากการกรอกจริง — Escape ถามเฉพาะเมื่อมีข้อมูลที่กรอก, คลิกพื้นหลังปิดได้เฉพาะตอนยังไม่กรอก (เดิมฟอร์มส่วนใหญ่ใน App.tsx ปิดทันทีและข้อมูลหาย)
+- AI draft modal ของ Test Case/Test Suite/Test Cycle ส่ง `dirty` เมื่อมี draft — คลิกพื้นหลังไม่ทิ้ง draft ที่ AI สร้างแล้ว
+- Execution Workspace: เปลี่ยนเคส (คลิกรายการหรือปุ่ม N) ขณะมีผล step/Actual/Comment ที่ยังไม่บันทึก ต้องยืนยันก่อน (เดิมผลที่กรอกถูกล้างเงียบ ๆ)
+
+### 2026-09-24 — UI รอบ 1: บั๊กที่ข้อมูลผิด/ใช้งานไม่ได้ (จากการตรวจ UI ทุกหน้า)
+
+- **Release Sign-off:** เหลือ modal เดียว (เดิม render ซ้อน 2 ชั้น), ป้ายตัวกรองเป็น Release/Build ตามจริง, Smoke ที่ยังไม่มีข้อมูลแสดง "Not Run" (ไม่ใช่ "Fail"), NO GO/CONDITIONAL GO ต้องกรอก Comment, error แสดงใน modal และโหลด Gate/ประวัติไม่สำเร็จแสดง error แทนหน้าว่าง; ฟอร์มไม่ปิดเมื่อคลิกพื้นหลัง
+- **Release/Build:** ป้ายสถานะ Build ใช้ `buildStatusTone` — Ready/Passed เขียว, Testing น้ำเงิน, Blocked เหลือง, Failed แดง, ไม่รู้จัก = เทา (เพิ่ม `.badge.gray`); เดิมหน้ารายการเขียวทุกสถานะ
+- **Topbar:** นำปุ่ม Export กลางที่ไม่มีการทำงานออก — Export อยู่ในหน้าที่รองรับ (Defect, Test Cycle, RTM, Automation, Test Summary)
+- **User / Role:** แสดง "สิทธิ์เพิ่มเติม" (สิทธิ์ที่ตาราง Create/Delete/Edit/View ไม่ครอบคลุม เช่น RISK.APPROVE, RELEASE.SIGNOFF, REPORT.EXPORT, AUTOMATION.EXECUTE) ซึ่งเดิมถูกซ่อนด้วย `display:none` จึงให้สิทธิ์จากหน้าจอไม่ได้; ตอนค้นหา ปุ่มเป็น "เลือก/ล้างที่แสดงอยู่" และไม่แตะสิทธิ์อื่น; โหลดผู้ใช้/สิทธิ์ไม่สำเร็จแสดง error + ลองใหม่ (เดิมหน้าพัง)
+- **Test Case:** ถ้าโหลดรายละเอียดไม่สำเร็จจะไม่เปิดฟอร์มแก้ไข (เดิมเปิดด้วยข้อมูลจากรายการที่ไม่มี steps แล้วบันทึกทับ steps จริง); ฟอร์มไม่ปิดเมื่อคลิกพื้นหลัง, มี role/aria-label และ error แสดงใน modal
+- **Test Cycle / Defect / Risk:** error ตอนบันทึกแสดงใน modal (เดิมแสดงที่หน้าหลักใต้ modal จึงมองไม่เห็น) และฟอร์มไม่ปิดเมื่อคลิกพื้นหลัง; Risk: Release ใน form มีตัวเลือก "เลือก Release" (เดิมแสดง Release แรกแต่ค่าจริงว่าง ทำให้ Save กดไม่ได้โดยไม่มีเหตุผล) และ Comment อนุมัติ/ปฏิเสธถูกล้างทุกครั้งที่เปิด
+- **RTM:** ยกเลิก Link ต้องกดยืนยันในแถว (เดิมลบทันที), error แสดงใน modal และ busy ไม่ค้างเมื่อเครือข่ายล้ม
+- กฎ (ใช้ต่อทุกหน้า): error ของการบันทึกใน modal ต้องแสดง **ภายใน modal**; ฟอร์มกรอกข้อมูลห้ามปิดด้วยคลิกพื้นหลัง; โหลดข้อมูลไม่สำเร็จต้องแสดง error ไม่ใช่รายการว่าง
+
+### 2026-09-24 — Automation: `ModalShell` มาตรฐานและการโหลด dropdown
+
+- ทุก modal ของหน้า Automation ใช้ `ModalShell` (`src/automation/ui.tsx`) แทนการเขียน `.modal`/`.modal-box` เอง: เปิดแล้ว focus ช่องกรอกแรก (หรือปุ่มแรก), Tab วนอยู่ใน modal, ปิดแล้วคืน focus ให้ปุ่มที่เปิด, Escape ปิดเฉพาะ modal บนสุด, มี `aria-labelledby` (หรือ `aria-label` เมื่อหัวข้อไม่มี id)
+- modal ที่เป็นฟอร์ม (`form`) คลิกพื้นหลังไม่ปิด และ Escape ต้องถามยืนยันก่อนทิ้งข้อมูล; modal อ่านอย่างเดียวปิดด้วยคลิกพื้นหลังได้; modal แสดง secret ใช้ `backdropDismiss={false}`; ระหว่าง busy ห้ามปิด (ตรวจใน `onDismiss`)
+- dropdown Build/Environment โหลดผ่าน `useBuildsAndEnvironments` ตัวเดียว และแสดง error **ภายใน modal นั้น** (เดิมบาง modal ส่ง error ไปที่หน้าหลักซึ่งถูก modal บังอยู่ หรือกลืน error แล้วแสดงเป็นรายการว่าง)
+- modal ใหม่ของหน้า Automation ต้องใช้ `ModalShell` เสมอ
+
+### 2026-09-24 — Automation: modal ข้อมูลสำคัญ และ error state
+
+- Secret ที่แสดงครั้งเดียว (เช่น Webhook Token) ต้องอยู่ใน modal ที่ **ไม่ปิดด้วยคลิกพื้นหลัง**, มีช่อง read-only + ปุ่ม "คัดลอก" (ถ้า clipboard ใช้ไม่ได้ให้เลือกข้อความและบอกให้กด Ctrl+C), และถามยืนยันก่อนปิดถ้ายังไม่ได้คัดลอก (ทั้งปุ่มปิดและ Escape); Mobile ช่องและปุ่มเรียงแนวตั้ง (`.automation-token-copy`)
+- คำสั่งที่รัน SQL บน DB จริง (Seed/Cleanup/MasterData, Restore) ต้องมี modal ที่ระบุชื่อ Script/ประเภท/DB, คำเตือนสีเหลือง และ `window.confirm` ที่ระบุ Environment/Build ก่อนส่ง แล้วแจ้งผลเมื่อเข้าคิวสำเร็จ
+- modal Execution Detail: ผลจำแนก/AI/Defect เป็นของ execution ที่เปิดอยู่เท่านั้น; ปุ่มสร้าง Defect แสดงตามสิทธิ์ `DEFECT.EDIT`, ถามยืนยัน และหายทันทีหลังสร้าง
+- รายการที่โหลดจาก API ต้องแยก "โหลดไม่สำเร็จ" (inline error `role="alert"` + ลองใหม่เมื่อทำได้) ออกจาก "ไม่มีข้อมูล" (`.empty`) — ห้ามแปลง 4xx/5xx เป็นรายการว่าง; ช่องค้นหาที่ยิง API ต้อง debounce ~300ms และยกเลิกคำขอเก่าด้วย `AbortController`
+
+### 2026-09-23 — System review: workspace stability, defect modal a11y, tokens
+
+- Execution Workspace: บันทึกผล (Save/Complete/Skip) หรือลบประวัติแล้วต้องคง Test Case ที่เลือกและตำแหน่ง scroll ไว้ — spinner เต็มหน้าแสดงเฉพาะตอนเปลี่ยน Test Cycle; ป้าย `Defect: <code>` ของ Step ต้องไม่หายหลัง reload (ล้างเฉพาะตอนเปลี่ยน Test Case)
+- Modal แก้ Defect ใน Workspace: focus ช่องชื่อ Defect ตอนเปิด, ปิดด้วย Escape ได้, ถ้ามีข้อมูลที่ยังไม่บันทึก (รวมรูปที่เลือก) ต้องยืนยันก่อนปิดทั้งจากปุ่ม ✕/ยกเลิก/คลิกพื้นหลัง/Escape; ถ้าสร้าง Defect สำเร็จแต่แนบรูปหรือเชื่อม Test Case ไม่สำเร็จ Defect ต้องขึ้นใน Linked Defects ทันที; ปุ่ม "เพิ่มรูป" ต้องแสดง focus ring (`:focus-within`) เพราะ input ถูกซ่อน; ปุ่ม Edit ของ Linked Defect ต้องมี `aria-label` ระบุรหัส Defect
+- หน้า Defect: โหลดสรุป (`/defects/stats`) ไม่สำเร็จต้องแสดง inline error + ปุ่มลองใหม่ ห้ามแสดงเป็น "ยังไม่มี Defect"; ปุ่มปิดข้อความ (icon-only) ทุกจุดต้องมี `aria-label="ปิดข้อความ"`
+- Dashboard share: ต้องเลือก Project ที่ Topbar ก่อนสร้างลิงก์ (ลิงก์แบบ "ทุก Project" ถูกยกเลิก) และแสดงข้อความ detail จาก server เมื่อสร้างไม่สำเร็จ
+- เพิ่ม token `--warning-text` และ `--info` (ดู §3) และใช้แทน hex ใน Test Summary release impact/unrun, Test Cycle case summary และ Execution Workspace metrics/step result; ข้อความประกอบใหม่ต้องมีขนาดอย่างน้อย 11px
+- หน้า Automation และ Audit Log โหลดแบบ lazy (แยก chunk) — ระหว่างโหลดแสดง card `.empty` + `.spinner` พร้อม `role="status"`
+- PDF Defect ตามโมดูลใช้ฟอนต์ตาม §3 (`Tahoma, "Noto Sans Thai", Arial`)
+
+### 2026-09-16 — Audit Log visual refresh
+
+- หน้า Audit Log ใช้ Page Header ของแอปเป็นหัวเรื่องชุดเดียว ไม่ซ้ำหัวเรื่องในการ์ด; แสดงจำนวนผลลัพธ์ในหัวรายการ พร้อมตัวค้นหา ตัวกรองประเภทข้อมูล สถานะ loading/error/empty และปุ่ม retry ที่ชัดเจน
+- Desktop ใช้ตารางเรียงใหม่ล่าสุดก่อน แยกเวลา ผู้ดำเนินการ Action ข้อมูลที่เกี่ยวข้อง และสรุป; Mobile แปลงแต่ละแถวเป็น card ไม่ให้เกิด horizontal scroll ระดับหน้า
+- รายละเอียดเปิดใน read-only modal มาตรฐาน โดยแสดงเฉพาะข้อมูลที่ API ส่งจริง (เวลา ผู้ดำเนินการ Action ประเภท/รหัสข้อมูล และสรุป) ไม่แสดง Before/After diff ที่ API ยังไม่มี
+
+### 2026-09-10 — Test Summary readiness gap unit
+
+- การ์ด Pass Rate ในส่วน “Release readiness gaps” แสดงส่วนต่างต่ำกว่าเกณฑ์ด้วยหน่วย `%` แทนคำว่า “จุด” เพื่อให้ตรงกับรูปแบบเปอร์เซ็นต์ที่ผู้ใช้ต้องการ
+
+### 2026-09-09 — Regression workspace visual refresh
+
+- หน้า Regression ใช้ workspace hero เพื่อสรุป Release, Target Build, Progress และสถานะรอบปัจจุบันจากข้อมูลเดิม พร้อมทางลัดไปยังการตั้งค่า Impact Analysis โดยไม่เพิ่ม API request
+- KPI 5 ด้านใช้ icon, accent color และคำอธิบายร่วมกับสี; workflow 3 ขั้นปรับเป็น step navigation ที่แยกสถานะ Done/Active/Next ชัดเจนและเข้าถึงด้วย keyboard
+- Impact Analysis, Recommended Cases, Schedule, Trend, Activity, Baseline และ History ใช้ลำดับชั้น card เดียวกัน; form control สูงอย่างน้อย 42px, focus ring ตาม primary token และรายการ Module/Test Case แสดง selected state ชัดเจน
+- Responsive hero/KPI/workflow ลดจากหลายคอลัมน์เป็น 1–2 คอลัมน์ตามพื้นที่จริง และข้อความ Release, Build, Module รวมถึง Test Case ต้อง wrap โดยไม่สร้าง horizontal scroll ระดับหน้า
+
+### 2026-09-09 — Risk Acceptance detail typography
+
+- Modal รายละเอียด Risk Acceptance ใช้น้ำหนักตัวอักษรปกติสำหรับเนื้อหา Issue, Workaround, Target Fix, QA Recommendation และ Review Comment พร้อมเพิ่ม line-height เพื่อให้อ่านข้อความยาวได้ง่าย โดยคงหัวข้อ ค่า Impact/Probability/Owner และสถานะไว้ที่น้ำหนักกึ่งหนาเพื่อรักษาลำดับชั้นข้อมูล
+- ชื่อ Risk ใน hero ใช้ขนาด 17px น้ำหนัก 600 และข้อความยาวต้อง wrap ภายใน modal โดยไม่สร้าง horizontal scroll บน Desktop หรือ Mobile
+
+### 2026-09-09 — Dashboard attention modules scalability
+
+- การ์ด “โมดูลที่ต้องติดตามเป็นพิเศษ” แสดง Top 8 โมดูลเป็นค่าเริ่มต้น พร้อมจำนวนโมดูลที่มีปัญหา ยอด Open Defect และอันดับรายโมดูลจาก Dashboard Summary ชุดเดียวกัน โดยห้ามยิง Defect list API ซ้ำ เพื่อให้ข้อมูลปรากฏพร้อม Dashboard และลดความสูงเมื่อข้อมูลเพิ่มขึ้น
+- รายการใช้ลำดับ ชื่อโมดูลที่ wrap ได้ จำนวน Defect และ progress bar แยกสองบรรทัด พร้อมปุ่มขยายดูทั้งหมด/ย่อกลับที่เข้าถึงด้วย keyboard และมี `aria-expanded`
+- Desktop จัดความสูงเริ่มต้นให้สมดุลกับกราฟผลการทดสอบ ส่วน Mobile ให้ summary wrap และชื่อยาวตัดบรรทัดโดยไม่สร้าง horizontal scroll ระดับหน้า
+- การ์ด “ภาพรวมผลการทดสอบ” และ “โมดูลที่ต้องติดตามเป็นพิเศษ” ต้องยืดเต็มความสูงของแถวเดียวกันบน Desktop; ฝั่งภาพรวมใช้พื้นที่เพิ่มสำหรับสถานะเทียบเกณฑ์ คำอธิบายฐานการนับแบบย่อ และการ์ดประเด็นดำเนินการ (Not Run, Fail/Blocked และ Coverage Gap) จาก Dashboard Summary เดิม โดยพื้นที่ส่วนเกินต้องกระจายรอบกราฟ ห้ามเว้นช่องว่างก้อนใหญ่ระหว่าง KPI กับประเด็นดำเนินการ
+- เมื่อกดดูโมดูลทั้งหมดบน Desktop รายการต้องเลื่อนภายในพื้นที่การ์ดเดิมและห้ามทำให้การ์ด “ภาพรวมผลการทดสอบ” ยืดตาม; Mobile ให้รายการขยายตามเนื้อหาปกติเพื่อหลีกเลี่ยง nested scroll
+
+### 2026-09-09 — Requirement list visual refresh
+
+- หน้า Requirement แสดง KPI 4 ด้านจากข้อมูลจริง (ทั้งหมด, In Scope, Approved และ Test Coverage) เป็นปุ่มกรองที่เข้าถึงด้วย keyboard และต้องแสดงสถานะที่เลือกด้วย `aria-pressed`
+- แสดง Workflow status chips พร้อมจำนวน, filter controls และ removable active-filter chips ภายใน card รายการเดียวกัน โดยการล้างตัวกรองต้องคืนค่าทุกเงื่อนไขของหน้า
+- ตาราง Desktop รวม Code/Title/Module และ Priority/Risk เป็นกลุ่มข้อมูลเดียวกัน ลดจำนวนคอลัมน์ พร้อมแสดง Scope/Coverage ด้วยข้อความร่วมกับสี; Requirement ใน Scope ที่ยังไม่มี Test Case ต้องเห็นจุดเตือนชัดเจน
+- Responsive KPI ใช้ 4/2/1 คอลัมน์ตามพื้นที่ และตาราง Mobile ใช้ labeled card rows โดยไม่สร้าง horizontal scroll ระดับหน้า
+- App shell ช่วง Tablet ≤1200px ต้องใช้ content track เต็มความกว้างและแสดง sidebar เป็น off-canvas; selector ของสถานะเมนูต้องไม่คืนค่า desktop grid จนบีบเนื้อหาเหลือเท่าความกว้าง sidebar
+
+### 2026-09-09 — Test Summary executive message readability
+
+- “ข้อความสรุปสำหรับผู้บริหาร” ต้องไม่แสดงเป็นย่อหน้ายาวต่อเนื่อง ให้แยกเป็นหัวข้อสถานะ, Fact cards 4 ด้าน (Execution, Test Result, Coverage, Risk) และแถบข้อสรุปเพื่อสแกนข้อมูลได้เร็ว
+- Fact cards ใช้ตัวเลขจาก Test Summary แหล่งเดียวกัน จัดวางสูงสุด 4 คอลัมน์และลดเป็น 2/1 คอลัมน์ตามพื้นที่ภายใน card จริง ไม่ยึดเฉพาะ viewport breakpoint และต้องแสดงสถานะด้วยข้อความร่วมกับสี
+
+### 2026-09-08 — Test Summary narrative persistence
+
+- การบันทึก Known Issues, Remaining Risks และ QA Recommendation ต้องเริ่มหลังโหลด Narrative ของ Release ปัจจุบันเสร็จแล้วเท่านั้น เพื่อไม่ให้ค่าเริ่มต้นว่างเขียนทับ `qa.testSummaryNarrative.{releaseId}` ระหว่าง refresh หรือเปลี่ยน Release
+- ข้อความที่ผู้ใช้แก้ไขต้องคงอยู่หลัง refresh; ปุ่ม Generate / Regenerate ยังคงแทนค่าด้วยข้อความที่ derive จาก Summary ล่าสุดตามพฤติกรรมเดิม
+
+### 2026-09-08 — Test Summary executive readiness gaps
+
+- Executive view ต้องมีข้อความสรุปและตัวเลข Readiness Gap ที่คำนวณจาก Test Summary แหล่งเดียวกัน เพื่อไม่ให้ข้อความขัดกับ KPI ที่แสดงบนหน้า
+- Readiness Gap ใช้เกณฑ์ Coverage/Pass Rate ≥ 90%, Execution 100% และ P0 = 0 พร้อมจัดวาง 4/2/1 คอลัมน์บน Desktop/Tablet/Mobile
+
+### 2026-09-08 — Test Summary decision support
+
+- หน้า Test Summary ต้องสรุป Quality Gate 6 ด้านด้วยสถานะ Pass/Fail/No Data โดยห้ามตีความข้อมูล Regression ว่าผ่านเมื่อ API ยังไม่มีหลักฐาน
+- Presentation Forecast ใช้วันที่นำเสนอที่ผู้ใช้ปรับได้และจำค่าแยกตาม Release พร้อมคำนวณจำนวน Test Case ขั้นต่ำต่อวันจาก Snapshot ล่าสุด; ต้องระบุว่าไม่รวมเวลาแก้ไขและ Retest
+- Top Blockers แสดง Open Defect สูงสุด 5 รายการ เรียง Severity และอายุ พร้อม Owner จากข้อมูลจริง; ฟิลด์ที่ระบบไม่มี เช่น ETA ต้องแสดง “ยังไม่ระบุ” และห้ามสร้างข้อมูลสมมติ
+- Quality Gate/Forecast จัดวาง 2/1 คอลัมน์ และ Top Blocker เปลี่ยนเป็น stacked row บน Mobile โดยไม่สร้าง horizontal scroll ระดับหน้า
+
+### 2026-09-08 — Test Summary trends and presenter mode
+
+- Test Summary เก็บ Daily Snapshot สูงสุด 30 วันแยกตาม Release ใน browser storage และเปรียบเทียบ Pass Rate, Execution, Open P0 และ Open Defects กับ Snapshot วันก่อนหน้า; วันแรกต้องแสดงสถานะรอข้อมูลแทนค่าการเปลี่ยนแปลงสมมติ
+- Data Confidence คำนวณจากความพร้อมของ Scope, Environment, Out-of-Scope, Regression, Installation/Update และ Performance พร้อมแสดงหมวดที่ขาดอย่างชัดเจน
+- Presenter Mode เป็น full-viewport read-only view สำหรับการประชุม แสดงเฉพาะ KPI, Executive View, Quality Gate, Forecast, Top Blockers, Trend และ Data Confidence; ปิดได้ด้วยปุ่มหรือ Escape และต้องรองรับ safe area/Mobile โดยไม่เกิด horizontal scroll
+
+### 2026-09-08 — Test Summary interactive drill-down
+
+- Readiness และ Quality Gate cards ต้องเป็น keyboard-accessible buttons พร้อม `aria-pressed`; เมื่อเลือกให้แสดงหลักฐานปัจจุบันและ Next Action ของ Gate เดียวกัน
+- Top Blockers ใช้ accordion button พร้อม `aria-expanded` เพื่อเปิดรายละเอียดและ Expected/Actual โดยค่าไม่ครบต้องแสดง “ยังไม่ระบุ”
+- Data Confidence chips ต้องกดเพื่อนำผู้ใช้ไปยังหมวด Release Report ที่เกี่ยวข้องและไฮไลต์หมวดนั้น; หากอยู่ใน Presenter Mode ให้กลับสู่หน้าปกติก่อนเลื่อนไปยังรายละเอียด
+
+### 2026-09-08 — Service Manager resource chart
+
+- ช่องว่างด้านขวาของ Automation Schedule Worker ใช้แสดงการ์ด `Service Resources` โดยกราฟเส้นสีน้ำเงินแทน CPU และสีเขียวแทน RAM ของ API + Web
+- เก็บข้อมูลสูงสุด 120 จุดทุก 1 วินาที, แสดงค่าปัจจุบันพร้อมหน่วย และวาดด้วย double buffering เพื่อให้หน้าจอลื่นโดยไม่สะสม control หรือ drawing resource
+
+### 2026-09-08 — Service Manager Activity Log layout
+
+- หน้าต่าง Service Manager ต้องมีความสูงขั้นต่ำ 640px และพื้นที่ Service Cards ต้องไม่เบียด Activity Log จนช่องข้อความมองไม่เห็น โดยสงวนพื้นที่แนวตั้งให้ Log ใช้งานได้ในขนาดหน้าต่างเริ่มต้น
+
+### 2026-09-08 — Test Case sortable columns
+
+- หัวตารางหน้า Test Case ใช้ขนาดตัวอักษร 12px และคอลัมน์ `Test Case ID` กับ `สร้างเมื่อ` เป็นปุ่มเรียงข้อมูลที่เข้าถึงด้วย keyboard ได้ พร้อมไอคอนแสดงสถานะและ `aria-sort`
+- การเรียงต้องทำฝั่ง Server ก่อนแบ่งหน้า รองรับน้อยไปมาก/มากไปน้อย และบันทึกคอลัมน์กับทิศทางล่าสุดไว้ใน `localStorage` ด้วย key `qa.testCases.listSort`
+- Frontend ต้องเรียงข้อมูลในหน้าปัจจุบันซ้ำตามค่าเดียวกัน โดย Test Case ID ใช้ natural numeric comparison เพื่อให้การคลิกตอบสนองถูกต้องแม้ API instance ที่กำลังรันยังเป็นเวอร์ชันก่อนรองรับ sort
+
+### 2026-09-08 — Execution Workspace Test Case queue
+
+- ส่วน Test Cases ใน Execution Workspace ต้องจัดหัวข้อ เครื่องมือ และข้อมูลภายในรายการชิดซ้ายอย่างสม่ำเสมอ
+- รายการ Test Case ต้องเรียง `Test Case ID` จากน้อยไปมากด้วย natural numeric order เพื่อให้รหัสที่ลงท้ายด้วย `2` อยู่ก่อน `10`; หากรหัสซ้ำให้ใช้ Cycle Case ID เป็นลำดับสำรองเพื่อให้ผลลัพธ์คงที่
+
+### 2026-09-07 — Test Case mobile text containment
+
+- การ์ดรายการ Test Case บน Mobile ต้องกว้างไม่เกินพื้นที่ของ table container และใช้ fixed table layout หลังแปลงตารางเป็น card
+- Test Case ID, Title และค่าทุกคอลัมน์ต้องตัดบรรทัดด้วย `overflow-wrap:anywhere` โดยห้ามดันการ์ดหรือทำให้เกิด horizontal scroll ระดับหน้า
+
+### 2026-09-07 — Global back-to-top control
+
+- ทุกหน้าภายใน App shell แสดงปุ่ม `กลับไปด้านบน` แบบลอยเมื่อ scroll container หลักเลื่อนเกิน 480px และกดแล้วเลื่อนกลับด้านบนแบบ smooth
+- ทุกขนาดหน้าจอใช้ปุ่มวงกลมขนาด 44px แสดงเฉพาะ Material Symbol `arrow_upward` โดยมี `aria-label` และ `title` อธิบายการทำงาน
+- ปุ่มต้องรองรับ keyboard focus, safe-area และ `prefers-reduced-motion` รวมทั้งใช้ z-index ต่ำกว่า modal เพื่อไม่ทับหน้าต่างโต้ตอบ
+
+### 2026-09-07 — Test Suite list visual refresh
+
+- ปรับหน้า Test Suite ให้ summary/actions, status chips, filters และ table อยู่ใน card เดียวที่แบ่งพื้นที่ชัดเจน
+- ลด visual weight ของ row actions โดย Desktop เรียง action ในแถวเดียวเพื่อลดความสูงของ data row; Mobile ใช้ touch target 34px และเรียงตามพื้นที่
+- สถานะ `ยังไม่มี Cycle` ในตาราง Test Suite ใช้สีแดงทั้งข้อความและ Material Symbol เพื่อสื่อว่าต้องดำเนินการต่อ
+- Test Suite pagination เริ่มต้น 30 รายการต่อหน้า และเลือก 30/50/100/150 ได้; เมื่อเปลี่ยน filter หรือจำนวนต่อหน้าต้องกลับหน้าแรก และแสดงจำนวนผลลัพธ์หลังกรอง
+- Filter รองรับ 5/3/2/1 ช่องตามพื้นที่ และ Mobile แสดง Suite เป็น labeled card rows โดยไม่เกิด horizontal scroll ระดับหน้า
+
+### 2026-09-07 — Test Case list visual refresh
+
+- ปรับหน้า Test Case ให้ summary/actions, filter และ table อยู่ใน card เดียวที่แบ่งพื้นที่ชัดเจน พร้อมลด visual weight ของ row actions
+- Template และ Import ใช้ Material Symbols พร้อม label ที่อ่านง่าย; filter ใช้ responsive grid 6/3/2/1 ช่องตามพื้นที่
+- Desktop ใช้ compact data table และ Mobile เปลี่ยนเป็น card rows ภายใน container โดยไม่สร้าง horizontal scroll ระดับหน้า
+- Pagination ใช้รูปแบบเดียวกับ Test Suite: ค่าเริ่มต้น 30 รายการ ตัวเลือก 30/50/100/150 แสดงจำนวนทั้งหมด และใช้ Material Symbols สำหรับก่อนหน้า/ถัดไป
+
+### 2026-09-07 — RTM dashboard visual refresh
+
+- ปรับ RTM summary เป็น icon-based coverage cards แยก Requirements, Covered, Partial และ Not Covered ด้วยสีเชิงความหมาย
+- จัด filter toolbar และตารางเป็น card เดียวกัน ลด visual weight ของ action buttons และเพิ่ม hover/readability สำหรับข้อมูล Requirement
+- Responsive ใช้ KPI 4/2 คอลัมน์ตามพื้นที่, filter 4/2/1 คอลัมน์ และ labeled table rows บน Mobile โดยไม่สร้าง horizontal scroll ระดับหน้า
+
+### 2026-09-07 — My Work dashboard visual refresh
+
+- ปรับหน้า My Work ให้ใช้ profile strip, icon-based metric cards, compact filter chips และ assignment card ที่แบ่ง header/filter/content ชัดเจน
+- Empty state ต้องอยู่กึ่งกลางพื้นที่ข้อมูลและใช้ Material Symbol ภายในกรอบสีอ่อน แทนการแสดงชิดมุมใต้หัวตาราง
+- Metric grid รองรับ 5/3/2/1 คอลัมน์ตามพื้นที่ และตาราง Mobile ใช้ labeled rows เดิมโดยไม่เกิด horizontal scroll ระดับหน้า
+
+### 2026-09-07 — My Work assigned-case data source
+
+- หน้า My Work ต้องใช้ `GET /api/v1/my-work` ซึ่งอ้างอิงผู้ใช้จาก Authentication Context และแสดง Test Cycle Case ที่ `AssignedTesterUserId` ตรงกับผู้ใช้ปัจจุบัน ห้ามใช้รายการที่ผู้ใช้สร้างเองแทนงานที่ได้รับมอบหมาย
+- แสดง summary และ filter จาก execution status พร้อม Module, Priority, Test Type, Test Cycle, Build, Due Date, Estimated Time และ action เข้า Execution Workspace
+- ตาราง Desktop ต้องเลื่อนภายใน container และ Mobile แปลงเป็น labeled rows โดยไม่สร้าง horizontal scroll ระดับหน้า
+
+### 2026-09-07 — Test Cycle detail visual hierarchy refresh
+
+- ปรับ modal รายละเอียด Test Cycle ให้มีความกว้างที่อ่านง่ายขึ้น พร้อม sticky breadcrumb header ภายใน modal
+- ปรับ progress summary เป็น responsive grid และแยก KPI เป็นการ์ดย่อยเพื่อสแกนข้อมูลได้เร็วขึ้น
+- เพิ่ม Material Symbols ให้หัวข้อข้อมูลหลัก และรองรับการจัดวางแบบเต็มจอบน Mobile โดยไม่เกิด horizontal scroll
+- Pagination หน้า Test Cycle ใช้รูปแบบเดียวกับ Test Suite: ค่าเริ่มต้น 30 รายการ ตัวเลือก 30/50/100/150 แสดงจำนวนทั้งหมด และรองรับ API สูงสุด 150 รายการต่อหน้า
+
+### 2026-09-07 — Material Symbols across all pages
+
+- ตรวจ React components ทุกหน้าและแทน icon แบบ emoji/text glyph ที่ยังเหลือสำหรับ action มาตรฐาน เช่น close, confirm, edit, refresh, download, AI, run, warning, navigation, power และ empty state ด้วย `Material Symbols Outlined`; ส่วนที่ใช้ Material Symbols อยู่แล้วคงเดิม
+- เพิ่มกฎกลางสำหรับขนาด line-height น้ำหนัก และ alignment ของ Material Symbols ภายใน button/table action/modal header เพื่อให้ไอคอนสม่ำเสมอทุกหน้า โดยข้อความ ลูกศรที่เป็นส่วนของข้อมูล และเครื่องหมายสถานะที่ไม่ใช่ icon ยังคงเดิม
+
+### 2026-09-07 — Cross-page responsive data integrity
+
+- ตรวจ responsive inventory ทุกหน้าจาก application routes และ stylesheet ทั้งหมด แล้วเพิ่ม safety layer กลางให้ page/card/grid children ใช้ `min-width: 0`, ข้อความและ identifier ยาว wrap ได้, media จำกัดตาม container และ wide table/permission matrix เลื่อนแนวนอนภายใน container เท่านั้นโดยไม่ดันทั้งหน้า
+- Tablet/Mobile ≤900px เปลี่ยน application shell และ topbar พร้อมกันเพื่อให้ iPad แนวตั้งแสดง content เต็มพื้นที่ และทำให้ filter/tool/action groups wrap โดยไม่บีบหรือซ่อนข้อมูล พร้อมคงปุ่ม primary/secondary ทุก action; modal ทุกชนิดใช้ `100dvh` เต็มจอตามมาตรฐาน ≤760px
+- แก้ mobile sidebar ที่ถูก desktop selector `.app.menu-closed .sidebar` บังคับให้แสดงค้างทับเนื้อหา: สถานะปิดต้อง translate ออกนอกจอเสมอ; เมื่อเปิดใน collapsed mode แถบกว้าง 64px และปุ่มกว้าง 46px เท่าพื้นที่ไอคอน โดยแบ่งพื้นที่ให้ `<main>` และไม่ใช้ backdrop บังข้อมูล ส่วนเมนูแบบเต็มยังใช้ backdrop ตามเดิม
+- Popup/Modal ทุกหน้าต้องยึดกับ viewport และเปิดตรงกลางจอเสมอ: `.page-transition` ห้ามคง `transform` หรือ `will-change: transform` เพราะจะสร้าง containing block ให้ `position: fixed` จน Popup เคลื่อนตาม scroll; page transition ใช้ opacity animation เท่านั้น
+- Small phone ≤560px ลด page/card padding, ให้หัวข้อ wrap และ action/pagination มี touch target ที่เหมาะสม โดยใช้ breakpoint และ component pattern เดิมของระบบ
+
+### 2026-09-07 — Test Cycle detail Material Symbols
+
+- หน้า Test Cycle/รายละเอียดใช้ `Material Symbols Outlined` จาก Google Fonts สำหรับไอคอนทั้งหมดแทน emoji และ text glyph ได้แก่ breadcrumb/close, cycle/status/type, environment, progress statistics, release/build/ผู้สร้าง/วันที่/suite/module, timeline, notes และปุ่มปิด/แก้ไข
+- หน้า Test Cycle ส่วนรายการและ action ที่นำไปยังรายละเอียดใช้ Material Symbols ชุดเดียวกันด้วย ได้แก่ retry/close notice, export, AI generate, create, bulk status, empty state, edit/start/close/delete และ pagination เพื่อไม่ให้มี glyph หรือ emoji เก่าปะปนใน flow หน้า Test Cycle
+- ไอคอนใช้ชื่อ ligature ที่สื่อความหมายพร้อม `aria-hidden="true"`; สี ขนาด วงกลมพื้นหลัง และ responsive timeline arrow กำหนดผ่าน class เฉพาะ `.cycle-detail-*` เพื่อไม่กระทบหน้าอื่น
+
+### 2026-09-07 — Test Suite detail Material Symbols
+
+- หน้า Test Suite/แสดงรายละเอียดใช้ `Material Symbols Outlined` แทน emoji, ตัวอักษรย่อ และ glyph ทั้งหมดใน header/close, hero, KPI, ข้อมูล Module/ผู้สร้าง/วันที่, กำหนดการและผู้ดำเนินการของ Test Cycle, ลิงก์เปิดรายละเอียด, expand list และ footer actions
+- กำหนดขนาด น้ำหนัก และ alignment ผ่าน selector ภายใต้ `.suite-detail` เพื่อรักษารูปทรง icon container และไม่เปลี่ยน icon ของหน้าอื่น
+
+### 2026-08-28 (Weighted Auto Assignment)
+
+- หน้า Test Cycle เพิ่ม action `Auto Assign Preview` ใน unified modal เดิม เพื่อเริ่ม workflow Preview อายุ 10 นาที; ใช้ปุ่มมาตรฐานและแสดงผลผ่าน notice/error เดิมของหน้า ไม่สร้าง page-level horizontal scroll หรือ modal pattern ใหม่
+- เพิ่ม Preview result modal แยก component แสดง Before/After Load, Score, Reason และ warnings; Confirm ใช้ primary button มาตรฐานและแสดง modal ซ้อนแบบ keyboard-accessible ตาม pattern เดิม
+- Test Cycle detail เพิ่ม Assignment History section แบบโหลดตามคำขอ ใช้ `.table-wrap` เพื่อจำกัด horizontal scroll ไว้เฉพาะตาราง
 
 ### 2026-08-26 (Automation Action/Object Management)
 
@@ -462,3 +757,223 @@ git diff --check
 - Backend เพิ่ม endpoint `POST /api/v1/test-cases/{id}/automation` (body `{automationCandidate:bool}`) และ domain method `TestCase.SetAutomationCandidate` เพื่อตั้งค่า Automation Candidate โดยไม่ต้องส่ง steps ใหม่ (ป้องกันการลบ Steps); สถานะใช้ endpoint `POST /test-cases/{id}/status` ที่มีอยู่แล้ว ทั้งคู่วนลูปเรียก API ทีละรายการแล้ว reload หน้าปัจจุบัน
 - Bulk กำหนด Automation Candidate ใช้ endpoint ที่มีอยู่แล้ว (`GET /test-cases/{id}` ดึง full รวม Steps แล้ว `PUT /test-cases/{id}` ส่ง `automationCandidate` ใหม่) วนลูปทีละรายการแล้ว reload หน้าปัจจุบัน — จึงทำงานได้โดยไม่ต้องรัน backend ใหม่ (endpoint `POST /test-cases/{id}/automation` ที่เพิ่มไว้ยังคงใช้ได้หากรัน backend ใหม่)
 - แก้ปุ่ม "แก้ไข" ไม่เปิดฟอร์ม: `openForm` เดิมใช้ `item?.steps.length` ซึ่งโยน TypeError เมื่อรายการจากตารางไม่มี field `steps` (list endpoint ไม่คืน steps) จึงคราส handler ก่อนเปิด modal; เปลี่ยนเป็น `item?.steps?.length` และให้ `openForm` ดึงรายละเอียดเต็ม (`GET /test-cases/{id}` ที่มี steps) มาก่อน populate ฟอร์มแก้ไขเพื่อให้บันทึกได้โดยไม่สูญเสีย Steps
+### Test Summary Executive View — 2026-09-03
+
+- Test Summary เพิ่ม Executive Snapshot แบบ read-only สำหรับผู้บริหาร โดยรวม recommendation, release context, timestamp, test status distribution และ risk signals จากข้อมูล summary เดิม
+- ใช้ section heading/eyebrow และ accent risk cards เพื่อแยกข้อมูลสำหรับการตัดสินใจออกจาก narrative ที่ผู้ใช้แก้ไขได้ โดยไม่เปลี่ยน API หรือ workflow เดิม
+- Executive content ต้อง responsive: desktop แบ่งสองคอลัมน์ และ mobile stack เป็นคอลัมน์เดียว พร้อม `overflow-wrap:anywhere` สำหรับ URL และ scope ที่ยาว
+### 2026-09-03 — Execution Workspace responsive styling
+
+- Execution Workspace-only responsive primitives are scoped in `ExecutionWorkspace.css`, including `min-width: 0`, `overflow-wrap: anywhere`, flexible action wrapping, and mobile touch targets.
+
+### 2026-09-03 — Automation responsive action layout
+
+- Automation section headers and action groups stack/wrap at mobile widths so controls remain reachable without page-level horizontal scrolling.
+### 2026-09-16 — Test Cycle Clone to New Target (Implemented)
+
+- Test Cycle Clone ใช้แนวคิด `Clone as New Cycle`: Source Cycle เป็น read-only reference และ Target ใช้ Cycle/Case ID ใหม่เสมอ เพื่อไม่เขียนทับ Execution History
+- Clone modal แบ่งข้อมูลเป็น Source Summary, Target Scope และ Clone Options; Target Release → Build เป็น dependent selector และ Environment ต้องกรองตาม Project/Active
+- แสดง preview จำนวน Test Case และ warning ที่อ่านได้ชัดเจนว่า Execution, Evidence, Assignment และผลเดิมไม่ถูกคัดลอก
+- ปุ่ม Clone ใช้ permission/disabled state และต้องมี inline loading/error/success feedback ตามมาตรฐาน modal เดิม
+- Desktop ใช้ modal สูงสุด 900px แบบ 2 คอลัมน์; Mobile ≤760px ใช้ full-screen modal, form 1 คอลัมน์, header/footer sticky และ action group wrap ได้ โดยห้ามเกิด page-level horizontal scroll
+- Detail ของ Target แสดง lineage badge/text `Cloned from <Source Cycle>` และใช้สี/Badge ตาม status เดิมของระบบ
+
+### 2026-09-18 — Defect module ranking
+
+- หน้า Defect แสดงอันดับจำนวน Defect รายโมดูลจาก `GET /defects/stats` ตาม Project/Release/Build context เดียวกับ KPI โดยรวมทุกสถานะและไม่ผูกกับตัวกรองของตารางที่แบ่งหน้า
+- เรียงจำนวนมากไปน้อย (จำนวนเท่ากันเรียง Module Code) พร้อมลำดับ จำนวน และแถบเทียบกับอันดับแรก; รวมกลุ่มไม่ระบุโมดูลและโมดูลที่ถูกลบเพื่อให้ยอดรวมตรงกับ Total
+- รายการใช้ `min-width: 0` และ `overflow-wrap: anywhere`; บน Mobile หัวการ์ด wrap และไม่ทำให้เกิด page-level horizontal scroll
+- คลิกอันดับโมดูลได้ทั้งเมาส์และ keyboard เพื่อกรองตาราง Defect ตามโมดูลนั้นและเลื่อนไปยังรายการ; ล้าง search และตัวกรองอื่นก่อนแสดงผล รองรับกลุ่มไม่ระบุโมดูลด้วย
+
+### 2026-09-18 — Defect module A4 PDF export
+
+- หน้า Defect มีปุ่มส่งออก PDF A4 ในหัวการ์ดอันดับโมดูลสำหรับผู้มีสิทธิ์ REPORT.EXPORT; ปุ่มปิดระหว่างโหลดสรุปหรือสร้างไฟล์ และแสดงสถานะกำลังสร้าง
+- รายงานใช้ Project/Release/Build context และข้อมูล summary ทั้งหมด ไม่อิงรายการตารางที่แบ่งหน้า; แสดงยอดสำคัญ โมดูลอันดับหนึ่ง และอันดับครบทุกโมดูล
+- รายงานแบ่งหน้าตามความสูงจริงของแถว มีหัวหน้าต่อและเลขหน้าทุกหน้า; ใช้สีและตัวอักษรสอดคล้องกับ design tokens และรองรับชื่อโมดูลภาษาไทยที่ยาว
+
+### 2026-09-20 — Execution Workspace inline Defect management
+
+- ปุ่ม `+ Defect` ของ Step ที่ Fail เปิด Unified modal ภายใน Execution Workspace พร้อมข้อมูล Test Case, Step, Cycle, Build, Environment และ Tester ที่เติมให้อัตโนมัติ ผู้ใช้แก้ Title, Severity, Status, Description, Steps to Reproduce, Expected และ Actual Result ก่อนบันทึกได้
+- Modal รองรับรูป PNG/JPG/WebP สูงสุด 5 รูป รูปละไม่เกิน 5 MB รวมไม่เกิน 20 MB พร้อม thumbnail, ลบรูปก่อนบันทึก และจัดการรูปของ Defect เดิม
+- แสดง Linked Defects ของ Test Case เหนือรายการ Step และเปิดแก้ไขรายละเอียด/รูปได้โดยไม่ออกจาก Workspace เฉพาะผู้มีสิทธิ์ `DEFECT.EDIT`
+- Desktop ใช้ modal สูงสุด 900px; Mobile ≤760px ใช้ full-screen modal, form หนึ่งคอลัมน์ และ image grid สองคอลัมน์โดยไม่เกิด page-level horizontal scroll
+
+### 2026-09-21 — Defect workspace visual hierarchy
+
+- หน้า Defect ใช้ลำดับการอ่าน 4 ช่วง: context ของข้อมูล, KPI สุขภาพรวม, ranking โมดูล และ Defect queue เพื่อให้เริ่มจากภาพรวมแล้วลงไปที่งานที่ต้องทำได้เร็วขึ้น
+- Ranking โมดูลแสดงอันดับต้น ๆ ก่อนและมีปุ่มขยายรายการทั้งหมด; queue แยกหัวข้อกับ filter bar พร้อมปุ่มล้างตัวกรองเมื่อมี filter active
+- เพิ่ม responsive rules สำหรับ intro/context, filter controls และ queue header ที่ breakpoint 760px; ตารางยังเลื่อนได้ภายใน table wrapper โดยไม่ทำให้เกิด page-level horizontal scroll
+
+### 2026-09-21 — Test Summary module readiness
+
+- หน้า Test Summary แสดงโมดูลที่ยังไม่เริ่มทดสอบและโมดูลที่ทดสอบแล้วแต่ยังไม่ครบ โดยใช้ข้อมูล Module Health จาก Summary เดียวกับ Execution Progress
+- รายการแสดง Module Code, ชื่อโมดูล, จำนวน Test Case และสัดส่วนที่ Execute แล้ว พร้อมสถานะว่างเมื่อไม่มีโมดูลค้าง
+- Layout แบ่งเป็น summary highlight และรายการสองกลุ่ม; บนจอเล็กจัดเป็นคอลัมน์เดียวและตัดข้อความยาวภายใน card
+
+### 2026-09-21 — Defect priority filter
+
+- หน้า Defect เพิ่มตัวกรอง Priority แยกจาก Severity และรองรับตัวเลือก P0–P3 เพื่อให้ค้นหารายการตามความสำคัญได้ตรงความหมาย
+- ตัวกรอง Priority ใช้ความสำคัญของ Test Case ที่เชื่อมโยงกับ Defect และยังคง responsive โดยไม่ทำให้เกิด horizontal scroll ระดับหน้า
+
+### 2026-09-21 — Test Summary release impact
+
+- เพิ่มส่วน Release Impact ใน Executive View เพื่อสรุประดับผลกระทบต่อการส่งมอบ โมดูลที่มีสัญญาณความเสี่ยง กำหนด Release และ Build ที่ใช้ประเมิน
+- แสดง Change Notes, Known Issues และข้อเสนอการจัดการจากข้อมูล Release, Build และ Test Summary ล่าสุด โดยข้อความยาวต้อง wrap ได้และไม่ทำให้เกิด horizontal scroll ระดับหน้า
+- รองรับ responsive layout: ข้อมูลผลกระทบและโมดูลเรียงเป็นคอลัมน์เดียวบนหน้าจอแคบ และใช้สีตามระดับ High/Medium/Low/Unknown ให้สอดคล้องกับสถานะคุณภาพเดิม
+
+### 2026-09-21 — Test Cycle detail Test Case list
+
+- หน้า Test Cycle Detail แสดงรายการ Test Case ใน Cycle พร้อมลำดับ, Code, Title, Priority, Module และสถานะล่าสุด
+- แสดง Expected Result ของ Step แรกในแต่ละ Test Case เป็นข้อความประกอบแบบตัดไม่เกิน 3 บรรทัด พร้อม title สำหรับดูข้อความเต็ม
+- แสดง Actual Result จากผล Execute ล่าสุดของ Test Case คู่กับ Expected Result และใช้สีฟ้าเพื่อแยกผลที่เกิดขึ้นจริงจากผลที่คาดหวัง
+- รายการโหลดจาก Execution Workspace endpoint เดิม และจำกัดความสูงด้วย internal scroll เพื่อไม่ให้ Modal ยาวจนใช้งานยากเมื่อมีหลายเคส
+- เพิ่มสถานะโหลด/ผิดพลาด/ไม่มีข้อมูล และ responsive layout สำหรับหน้าจอแคบโดยไม่ทำให้เกิด page-level horizontal scroll
+
+### 2026-09-21 — Test Suite context scope
+
+- Test Suite ใช้ขอบเขตระดับ Project จึงให้ตัวกรอง Project ด้านบนมีผลกับรายการโดยตรง
+- Release และ Build ไม่กรองรายการ Test Suite เพราะ Suite เป็นชุดทดสอบที่นำกลับมาใช้ซ้ำได้; สองบริบทนี้จะถูกใช้เมื่อเลือก Suite ไปสร้าง Test Cycle
+- เพิ่มข้อความอธิบายขอบเขตบนหน้า Test Suite เพื่อไม่ให้ผู้ใช้เข้าใจว่า Release/Build กำลังกรอง Suite อยู่
+- ในรายละเอียด Test Suite ให้แสดง Release/Build ที่ถูกใช้งานผ่าน Test Cycle พร้อมสรุปแบบไม่ซ้ำ และแสดงข้อมูลเดียวกันในรายงานส่งออก
+
+### 2026-10-02 — CRM read-only work queue
+
+- หน้า CRM แสดงเฉพาะ Ticket ที่ Backend คัดตาม `Assignto` ของ CRM Username ผู้ใช้ปัจจุบัน; Frontend ไม่รับหรือส่ง User Scope เอง
+- Page header ใช้ Connection State และ CRM Username ตามด้วย KPI 4 ใบ: Total, Open, In Progress และ Closed; KPI ใช้ข้อมูลรวมทั้งผลลัพธ์ ไม่ใช่เฉพาะหน้าปัจจุบัน
+- Filter ใช้ Search จาก App shell ร่วมกับ Date Range, Status และ Page Size; เปลี่ยนตัวกรองจะ debounce 300ms และยกเลิก request เก่า
+- Ticket list ใช้ `table-cards` เพื่อเปลี่ยนเป็น card บน Mobile ≤760px; ตารางเลื่อนได้เฉพาะ container และห้ามเกิด page-level horizontal scroll
+- สถานะ CRM แสดงทั้ง Badge และข้อความ; สถานะที่ไม่รู้จักใช้โทนข้อมูล ไม่ทำให้รายการหาย และ Empty/Error/Loading แสดงแยกกัน
+- Job No. ในรายการเป็นปุ่มแบบ Read-only ที่เปิด `ModalShell` รายละเอียดได้ด้วย Mouse/Keyboard; Modal ต้องมี `aria-labelledby`, focus trap, Escape และคืน focus ไปยังปุ่มเดิม
+- Detail Modal โหลดข้อมูลเพิ่มเติมผ่าน QA Hub Detail API แบบ Read-only; แสดง Description และ Comment history เมื่อ CRM ตอบกลับได้ และต้องแยกสถานะ Loading/Error/Empty ให้ชัดเจน
+- ใน Detail Modal ให้ใช้ลิงก์ `target="_blank"` + `rel="noreferrer"` สำหรับเปิด Ticket ต้นทางใน CRM และต้องระบุด้วยไอคอน/ข้อความว่าเปิดแท็บใหม่
+- เมื่อ CRM ยังไม่พร้อมใช้งาน ให้แสดง CTA `ตั้งค่าบัญชี CRM ของฉัน` บนหน้า CRM และเชื่อมไปยัง Modal ใน App shell; ไม่สื่อว่าเป็นงานของ Admin เท่านั้น
+- หน้า CRM ต้องโหลด Connection State ก่อน List และเมื่อสถานะเป็น Not Configured/Error ให้หยุด List Request พร้อมแสดงสถานะเฉพาะของหน้านั้น
+- หลังบันทึกบัญชี CRM จาก Modal ของ App shell หน้า CRM ต้อง re-check Connection และโหลด List ใหม่อัตโนมัติ ไม่บังคับให้ผู้ใช้กด Refresh เอง
+- Ticket list ต้องแสดงอายุงานจาก Contact Date และเวลาตอบล่าสุดเมื่อ CRM ส่งค่าได้; ถ้าไม่มีค่าให้ใช้ `-` และไม่ทำให้แถวหาย
+- เมื่อ `lastFetchedAt` เกิน 15 นาที ให้แสดง Stale Alert พร้อมเวลาที่โหลดล่าสุดและปุ่ม Refresh; Stale เป็น Warning ที่ไม่ปิดกั้นการอ่านข้อมูลเดิม
+- หากตรวจสอบ Connection ไม่สำเร็จ ให้แสดงปุ่มลองตรวจสอบอีกครั้ง; แสดง CTA ตั้งค่าบัญชีเฉพาะกรณี Not Configured เพื่อไม่ปะปนระหว่างปัญหา Credential กับปัญหา Network/API
+- Error จาก CRM ต้อง map จาก stable error code เป็นข้อความและหัวข้อที่ผู้ใช้ดำเนินการต่อได้ เช่น Not Configured, Unauthorized, Rate Limited, Timeout และ Unavailable; ห้ามแสดงทุกกรณีเป็นข้อความโหลดข้อมูลทั่วไปเดียวกัน
+- Detail Modal ที่โหลดข้อมูลไม่สำเร็จต้องมี Retry action ภายใน Modal เพื่อให้ผู้ใช้ลองซ้ำได้โดยไม่ต้องปิดแล้วเปิด Ticket ใหม่
+- Connection Badge ต้องสื่อความหมายตามข้อมูลที่ API ตรวจจริง: `ตั้งค่าแล้ว` หมายถึงมี Configuration ที่เปิดใช้งาน, `ต้องตั้งค่า` หมายถึงยังไม่มี Configuration และ `ตรวจสอบไม่ได้` หมายถึง Connection API ล้มเหลว; ห้ามใช้คำว่าเชื่อมต่อสำเร็จหากยังไม่ได้ probe CRM จริง
+- เมื่อสถานะเป็น `ตั้งค่าแล้ว` ให้มีปุ่ม Probe แบบ user-initiated เพื่อทดสอบการเชื่อมต่อจริงผ่าน read-only endpoint; แสดงผลสำเร็จ/ล้มเหลว inline และห้ามแสดง Credential หรือ Token
+
+### 2026-10-03 — CRM Phase 3: Board และ QA Hub Defect linking
+
+- หน้า CRM เพิ่มตัวสลับ `List`/`Board`; Board แบ่ง Ticket เป็น Open, In Progress และ Closed และใช้ข้อมูลชุดเดียวกับตัวกรองปัจจุบัน
+- Board card เป็นปุ่มที่เปิด Detail Modal เดิมได้ด้วย Mouse/Keyboard; ไม่สร้าง page-level horizontal scroll และเปลี่ยนเป็น 1 คอลัมน์บน Mobile
+- Detail Modal แสดงสถานะการเชื่อมกับ QA Hub Defect และใช้ `ModalShell` แยกสำหรับค้นหา/เลือก Defect ที่ผู้ใช้เข้าถึงได้
+- การ Link เป็น action ที่ต้องมี `DEFECT.EDIT`; UI แสดง Loading/Error/Empty และป้องกันการกดซ้ำระหว่างบันทึก
+### 2026-10-03 — CRM Phase 4: Controlled CRM update
+
+- CRM Ticket detail exposes the update action only when the current user has `CRM.EDIT`.
+- Status/Assignee editing uses a dedicated `ModalShell`, explicit loading/error states, disabled submit during save, and mobile-safe stacked controls.
+- The UI communicates that only Tickets linked to QA Hub Defects can be changed; the backend remains the source of truth for Project Access, CRM ownership, allowed status values, and conflict detection.
+
+### 2026-10-03 — CRM visual refresh
+
+- ปรับ CRM work queue ให้มี visual hierarchy ชัดขึ้นด้วย Hero connection card, KPI card แบบ accent ตามความหมาย, Filter/List surface แยกชั้น และ Board column accent
+- เพิ่ม hover/focus/readability treatment ให้ Ticket table, Board card และ Detail Modal โดยยังใช้ design tokens เดิมและไม่เปลี่ยน interaction contract
+- Responsive rule: Hero/Filter/List stack บน Mobile, KPI ลดเป็น 2/1 คอลัมน์ตาม viewport, Modal/Board ไม่สร้าง page-level horizontal scroll
+### 2026-10-03 — CRM ticket table readability patch
+
+- Desktop CRM ticket lists now keep each field inside its assigned column with explicit column proportions, wrapping rules, and bounded subject/service text.
+- Contact and due dates are rendered as separate date/time lines so timestamps do not collide or create page-level horizontal overflow.
+- Mobile continues to use the existing `table-cards` card conversion; no new page-level horizontal scroll is introduced.
+
+### 2026-10-03 — CRM Board card wrapping patch
+
+- Board cards now enforce `min-width: 0`, bounded content width, and wrapping/clamping for Job No., Subject, Service/Product, and Assignee text.
+- Board content cannot overflow its column; the responsive one-column mobile Board layout remains unchanged.
+
+### 2026-10-03 — CRM Board card hierarchy refinement
+
+- Board cards use a stable three-level hierarchy: Job No. and Status on the top row, Subject below, and Service/Assignee as supporting metadata.
+- Status badges remain intact and Job No. receives the available width before falling back to ellipsis.
+
+### 2026-10-03 — CRM Board ออกแบบการ์ดใหม่
+
+- แก้ต้นเหตุการ์ดเรียงแนวนอน/ข้อความแตกทีละตัว: การ์ดเป็น `<button>` และ global `button:not(.icon-button)` (specificity 0,1,1: `inline-flex` + `nowrap` + padding 10/16) ชนะ `.crm-board-ticket` — CSS ของบอร์ดรวมเป็นชุดเดียวท้าย `Crm.css` และใช้ selector `button.crm-board-ticket`; กฎ: **component ที่เป็น `<button>` แต่จัด layout เอง (การ์ด/รายการ) ต้องเขียน selector เป็น `button.<class>` หรือสูงกว่า**
+- คอลัมน์: สีตามกลุ่มจาก `data-bucket` (Open เหลือง, In Progress `--info`, Closed เขียว) — เส้นบนหัวคอลัมน์ + จุดสี + ตัวนับ, เนื้อหาเลื่อนในคอลัมน์ (`max-height: 68vh`) แทนการยืดหน้า; คอลัมน์ว่างแสดงกรอบเส้นประ "ไม่มี Ticket"
+- การ์ด: แถบซ้ายสีตามคอลัมน์, แถวบน Job No. (primary, ellipsis) + Badge สถานะ, เรื่อง 13px/600 ตัด 2 บรรทัด (`title` แสดงเต็ม), แถวล่างคั่นเส้นมีไอคอน Service · Assignee · อายุงาน (ชิดขวา); hover ยกการ์ดเล็กน้อย, มี `aria-label`
+- Mobile ≤760px: 1 คอลัมน์และไม่จำกัดความสูงคอลัมน์ (ไม่มี scroll ซ้อน)
+- สถานะ CRM: `Test`/`Testing` ใช้ Badge สีม่วง แยกจาก `Continue` และสถานะกำลังดำเนินการอื่นที่เป็นสีน้ำเงิน (Open เหลือง, Close/Finish เขียว คงเดิม)
+- ลำดับการ์ดในแต่ละคอลัมน์เรียงตามอายุงาน (Contact Date) **มากไปน้อย** — Ticket ที่อยู่มานานสุดอยู่บนสุด, ไม่มีวันที่ติดต่อไว้ท้ายคอลัมน์; เรียงเฉพาะข้อมูลในหน้าปัจจุบัน — List ใช้ลำดับเดียวกัน (`sortedRows`)
+
+### 2026-10-03 — CRM Ticket list ออกแบบใหม่
+
+- คอลัมน์ "กำหนดส่ง" เปลี่ยนเป็น **อายุงาน**: ป้ายจำนวนวันนับจาก Contact Date (`ageDays`) สีตามระดับ — < 3 วันเขียว, 3–6 วันเหลือง (`--warning-text`), ≥ 7 วันแดง, ไม่มีวันที่เทา — และ "ตอบล่าสุด" ใต้ป้าย (ย้ายมาจากคอลัมน์ Service); กำหนดส่งยังแสดงใน Detail Modal
+- แถวเรียงตามอายุงานมากไปน้อยเหมือน Board; แถบซ้ายสีตามกลุ่มสถานะ (Open เหลือง / In Progress `--info` / Closed เขียว) — Desktop อยู่ที่ cell แรก, Mobile (`table-cards`) เป็นขอบซ้ายของการ์ด
+- หัวตารางชิดซ้ายตรงกับข้อมูล, Product เป็นชิปเทา, Assignee มี avatar ตัวย่อ, รหัสสมาชิกใต้เรื่องมีไอคอน, สัดส่วนคอลัมน์ Desktop 16/25/9/17/10/10/13%
+- แก้ `.crm-job-link`/`.crm-defect-option` ที่โดน padding/nowrap ของ global `button:not(.icon-button)` ทับ (Job No. ดูเหมือนจัดกลาง) — เปลี่ยนเป็น `button.<class>` ตามกฎในหัวข้อ Board
+- ตรวจด้วย harness ที่ใช้ CSS ที่ build จริง: 1280px และ iframe 390px (`scrollWidth` = `clientWidth`)
+
+### 2026-10-03 — CRM ส่วนหัว (Hero / KPI / ตัวกรอง) ออกแบบใหม่
+
+- ยกเลิก pseudo-element ตกแต่ง (`::before` ไอคอน + วงกลมมุมการ์ด) ที่ทับข้อความ "MY CRM WORK QUEUE" และถูกตัดขอบ — กฎ: **ห้ามใช้ shape ตกแต่งที่ซ้อนทับหรือถูกตัดครึ่งบน card ข้อมูล**
+- Hero: ไอคอน `support_agent` ในกล่อง primary 56px ทางซ้าย + eyebrow/ชื่อ/Badge/คำอธิบาย; ขวาเป็นการ์ดบัญชี (avatar ตัวย่อ + CRM Username + เวลาอัปเดต) และปุ่มทดสอบการเชื่อมต่อเต็มความกว้างคั่นเส้น; ≤900px การ์ดบัญชีลงแถวใหม่
+- KPI: render จาก array เดียว, หัวการ์ดมีชื่อ + ไอคอนในกล่องสีตาม `--crm-accent` (ทั้งหมด primary / Open เหลือง / กำลังดำเนินการ `--info` / ปิดแล้ว เขียว), ตัวเลข 30px/800, Open/กำลังดำเนินการ/ปิดแล้ว แสดง % ของทั้งหมดและแถบสัดส่วน; ≤420px ยังเป็น 2 คอลัมน์ (เดิม 1 คอลัมน์ทำให้หน้ายาว)
+- ตัวกรอง: หัวข้อมีไอคอน `tune`, ช่องกรองอยู่ในกล่องพื้น `--surface` แยกจากหัวข้อ, label สี muted 11px
+- ตรวจด้วย harness ที่ใช้ CSS ที่ build จริง: 1280px และ iframe 390px (`scrollWidth` = `clientWidth`)
+
+### 2026-10-03 — CRM: คอลัมน์ Assignee เปลี่ยนเป็น ผู้แจ้ง / สาขา
+
+- หน้า CRM แสดงเฉพาะ Ticket ที่มอบหมายให้ผู้ใช้เอง คอลัมน์ Assignee จึงซ้ำทุกแถว — List เปลี่ยนเป็น **ผู้แจ้ง / สาขา** (`member` ไอคอน `person` + `branch` ไอคอน `storefront`, ellipsis + `title`; ไม่มีสาขาแสดง "ไม่ระบุสาขา") และเอารหัสผู้แจ้งใต้ชื่อเรื่องออก (ไม่ซ้ำ); Board card meta เปลี่ยนจาก Assignee เป็นผู้แจ้ง
+- Detail Modal เพิ่มช่อง "สาขา"; ยังแสดง Assignee ใน Modal เพราะเป็นค่าที่แก้ได้ผ่าน Controlled CRM update
+- สัดส่วนคอลัมน์ Desktop 16/23/9/16/13/10/13%; ใช้ `branch` ที่ API list ส่งมาอยู่แล้ว (ไม่แก้ backend)
+
+### 2026-10-03 — CRM: ช่วงวันที่แบบ preset + กำหนดเอง
+
+- ตัวกรองวันที่เปลี่ยนจาก 2 ช่อง date เป็นกลุ่ม **ช่วงวันที่ติดต่อ** (segmented, `role="group"` + `aria-pressed`): `7 วัน` / `15 วัน` / `30 วัน` / `กำหนดเอง` — **ค่าเริ่มต้น 30 วัน**; preset ตั้ง From = วันนี้ − N, To = วันนี้ และแสดงช่วงที่ใช้จริงใต้ปุ่ม
+- `กำหนดเอง` (`aria-expanded`/`aria-controls`) เปิดส่วนแยก `.crm-custom-range` (กรอบเส้นประพื้น primary อ่อน) ที่มีช่องวันที่เริ่มต้น–สิ้นสุด โดยตั้งต้นจากช่วงที่เลือกอยู่
+- ช่องวันที่ `CrmDateField` แสดง **วัน/เดือน/ปี พ.ศ.** ตรงกับวันที่ในรายการ: ข้อความที่จัดรูปแบบเองอยู่ใต้ native `<input type="date">` โปร่งใสเต็มช่อง (คลิกเรียก `showPicker()`, focus ring ด้วย `:focus-within`) เพราะรูปแบบที่ input แสดงเองขึ้นกับ locale ของเบราว์เซอร์ (เดิมเห็นเป็น ด/ว/ค.ศ.) — กฎ: **ช่องวันที่ที่ต้องแสดงวัน/เดือน/ปี ให้ใช้ pattern นี้ ห้ามพึ่งรูปแบบของ native input**
+- Responsive: กลุ่มช่วงวันที่ span 2 คอลัมน์บน Desktop, เต็มแถว ≤1000px; ส่วนกำหนดเอง stack ≤760px และช่องวันที่เรียงแนวตั้ง ≤420px; ตรวจ 1280px และ iframe 390px (`scrollWidth` = `clientWidth`)
+
+### 2026-10-03 — CRM Ticket detail modal แบบหน้าเดียว
+
+- เปลี่ยนจาก modal 720px ที่ต้องเลื่อนยาว (hero + การ์ดข้อมูล 9 ใบ + Description + Comment) เป็น `.crm-ticket-modal` (`boxClassName`) กว้าง ≤1080px สูง ≤780px/`100dvh − 32px` แบบ grid 3 แถว: หัว / เนื้อหา / footer — **ทั้งกล่องไม่เลื่อน** แต่ละคอลัมน์เลื่อนในตัวเอง
+- หัว: eyebrow "รายละเอียด Ticket · Read-only จาก CRM", Job No. (h2 = `aria-labelledby`) + Badge สถานะ + ป้ายอายุงาน (สีเดียวกับ List) และชื่อเรื่อง ตัด 2 บรรทัด
+- ซ้าย: รายละเอียด (สูงสุด 220px เลื่อนในกล่อง) และประวัติการติดต่อแบบ avatar ตัวย่อ + ชื่อ/เวลา + ข้อความ (ไม่มี scroll ซ้อนในรายการ); ขวา 330px พื้น `--surface`: ตารางข้อมูล `dl` แถวละ ไอคอน+ป้าย/ค่า (ellipsis + `title`) 8 แถว, QA Hub Defect (ปุ่มเต็มความกว้าง, เชื่อมกับ Defect เป็น primary) และ Controlled CRM update
+- Footer: ปิดหน้าต่าง (ซ้าย) + เปิดใน CRM (แท็บใหม่) เป็น primary; ลบ CSS `.crm-detail-modal`/`.crm-detail-hero`/`.crm-detail-grid` ที่ไม่ใช้แล้ว
+- Mobile ≤760px: เต็มจอ `100dvh` ไม่มี radius, ข้อมูลสรุปขึ้นก่อน แล้วตามด้วยรายละเอียด/ประวัติ เลื่อนทั้งเนื้อหา (`flex: 0 0 auto` กันส่วนข้อมูลถูกบีบ), footer ปุ่มแบ่งเท่ากัน + safe-area; ตรวจ 1280×760 และ iframe 390px (`scrollWidth` = `clientWidth`)
+- ประวัติการติดต่อเรียง **ล่าสุดอยู่บนสุดเสมอ** (`sortedAnswers` อ่านวันที่ด้วย `toUtcDate` ตัวเดียวกับที่แสดงผล; ไม่มี/อ่านวันที่ไม่ได้ไว้ท้ายสุด) และหัวข้อแสดง "n รายการ · ล่าสุดอยู่บน"
+
+### 2026-10-03 — CRM: วันที่และเวลาเป็นเวลาไทยทั้งหมด
+
+- Backend `CrmTicketListParser.NormalizeDate` ใช้กับวันที่ทุกตัวรวม `answerDate` ของประวัติการติดต่อ (เดิมส่งดิบ ทำให้เวลาไทยถูกตีเป็น UTC แล้วแสดงเพิ่ม 7 ชม. และรูปแบบเลขล้วน `yyyyMMddHHmmss` แสดงเป็น "-"); ค่าไม่มี offset รวมวันที่ไม่มีเวลาถือเป็นเวลากรุงเทพ (เดิมวันที่ล้วนกลายเป็น 07:00 น.); ตัวกรองช่วงวันที่เทียบด้วยวันตามปฏิทินไทย (เดิม Ticket 00:00–06:59 น. ตกเป็นวันก่อนหน้า) — รายละเอียดใน `API_SPECIFICATION.md`
+- Frontend: วันที่ของปุ่ม 7/15/30 วันและค่า "วันนี้" ใช้ปฏิทินกรุงเทพ (`Intl` + `Asia/Bangkok`) ไม่ขึ้นกับ timezone ของเครื่อง; อายุงานนับเป็น **วันตามปฏิทินไทย** ผ่าน `bangkokMidnightMs` (ติดต่อเมื่อวาน 23:00 น. = 1 วัน) แทนการนับรอบ 24 ชม.; การเรียงใช้ `toUtcDate` ชุดเดียวกับการแสดงผล; วันที่ทั้งหมดยังแสดงเป็น วัน/เดือน/ปี พ.ศ. เวลา 24 ชม. (`fmtDateTimeBE`)
+
+### 2026-10-03 — CRM: แยก Ticket ที่ปิดงานแล้ว (Finish / Close)
+
+- List และ Board แสดงเฉพาะ **งานที่ต้องดำเนินการ** (`activeRows`): Board เหลือ 2 คอลัมน์ Open / In Progress (Mobile 1 คอลัมน์); ถ้าหน้านี้ไม่มีงานค้างแสดง "ไม่มีงานที่ต้องดำเนินการในหน้านี้"
+- Ticket สถานะ Finish/Close (`closedRows`) อยู่ในส่วน **ปิดงานแล้ว** ใต้รายการหลัก ใช้ได้ทั้ง List/Board: `<details>` **พับไว้เป็นค่าเริ่มต้น**, summary มีไอคอน `task_alt` + คำอธิบาย + จำนวนรายการ + chevron หมุนเมื่อเปิด, พื้นเขียวอ่อน; ข้างในเป็นตารางคอลัมน์เดียวกับ List (`ticketTableHead`/`renderTicketRow` ชุดเดียวกัน) โทนจาง (opacity .82, hover = 1) และเปิด Detail Modal ได้เหมือนเดิม; ซ่อนทั้งส่วนเมื่อไม่มี Ticket ที่ปิดแล้ว
+- แยกเฉพาะข้อมูลในหน้าปัจจุบัน (pagination ยังมาจาก API); KPI "ปิดงานแล้ว" ยังนับจาก summary ทั้งผลลัพธ์
+
+### 2026-10-03 — CRM: แจ้ง "CRM / BlueID ไม่พร้อมใช้งาน" แทนการให้ตรวจรหัสผ่าน
+
+- เมื่อเซิร์ฟเวอร์ login ของ BlueID ต่อไม่ได้ (network error ของเบราว์เซอร์ `net::ERR_*`) หน้า CRM แสดงข้อความจาก API (`CRM_UNAVAILABLE`) เช่น "CRM / BlueID ไม่พร้อมใช้งาน — เชื่อมต่อเซิร์ฟเวอร์ login ของ BlueID ไม่ได้ (ERR_CONNECTION_TIMED_OUT)" หรือ "...ระบบจะลองเชื่อมต่อใหม่หลัง HH:mm น." — เดิมแสดง "ตรวจสอบ MerchantID/Username/Password" ทำให้เข้าใจผิดว่ารหัสผิด; error code อื่นยังใช้ข้อความเดิม
+
+### 2026-10-03 — CRM Board: สีการ์ดตามสถานะ
+
+- การ์ดใน Board ใช้สีตาม **สถานะของ Ticket** (`data-tone` จาก `statusTone` ชุดเดียวกับ Badge) แทนสีคอลัมน์: Open เหลือง, Test/Testing ม่วง, Continue และสถานะกำลังดำเนินการอื่นน้ำเงิน (`--info`), Finish/Close เขียว, ไม่รู้จักเทา — แถบซ้าย 3px สีเต็ม, พื้นการ์ด 5% (hover 8%), เส้นขอบ/เส้นคั่น meta โทนเดียวกัน; หัวคอลัมน์ยังใช้สีของกลุ่มตามเดิม
+
+### 2026-10-03 — CRM Hero แบบกะทัดรัด
+
+- Hero ลดความสูงบน Desktop จากประมาณ 190px เหลือประมาณ 76px: ตัด eyebrow "MY CRM WORK QUEUE", ไอคอน 40px, ชื่อ 18px + Badge + คำอธิบาย 12px ในแถวเดียว; ด้านขวาเป็นแถวเดียว (ไม่มีการ์ดซ้อน) avatar 32px + CRM Username + เวลาอัปเดต | เส้นคั่น | ปุ่มทดสอบการเชื่อมต่อ (ผล probe แสดงข้างปุ่ม)
+- ≤900px บัญชีลงแถวใหม่คั่นเส้นบน; ≤420px ปุ่มทดสอบเต็มความกว้าง; ตรวจ 1280px และ iframe 390px (`scrollWidth` = `clientWidth`)
+
+### 2026-10-03 — CRM Ticket detail: อัปเดต Ticket (เพิ่มประวัติ / สถานะ / ส่งกลับเจ้าของเรื่อง)
+
+- ฟอร์ม **อัปเดต Ticket** `.crm-reply` อยู่บนสุดของคอลัมน์ซ้ายใน Detail Modal (เฉพาะผู้มี `CRM.EDIT`, ทุก Ticket ในงานของผู้ใช้ ไม่ต้องเชื่อม Defect): textarea เพิ่มประวัติการติดต่อ (≤1000 ตัวอักษร มีตัวนับ, Ctrl/⌘+Enter ส่ง) + select สถานะ ("คงเดิม (สถานะปัจจุบัน)" + 9 สถานะของ CRM) + checkbox **ส่งกลับเจ้าของเรื่อง** (แสดง "Assign เป็น {เจ้าของเรื่อง}", disabled เมื่อ Ticket ไม่มีเจ้าของเรื่อง) + ปุ่ม primary "บันทึกไป CRM" — บันทึกทั้งหมดใน PATCH เดียว; ปุ่ม disabled จนกว่าจะมีข้อความหรือการเปลี่ยนแปลง และระหว่างบันทึกแสดง spinner
+- ส่งกลับเจ้าของเรื่องต้องยืนยันผ่าน `confirmDialog` (Ticket จะออกจากรายการงานของผู้ใช้) แล้วปิด Modal + โหลดรายการใหม่; กรณีอื่นแจ้ง toast สำเร็จ, โหลดรายละเอียด/ประวัติและรายการใหม่; error แสดงใต้ฟอร์ม (`role="alert"`), `CRM_CONFLICT` โหลด Ticket ใหม่อัตโนมัติ; เปลี่ยน Ticket ที่เปิดจะล้างฟอร์ม
+- ข้อมูลด้านขวาเพิ่ม **เจ้าของเรื่อง**; ลบแถบ/Modal "Controlled CRM update" เดิม (แก้ได้เฉพาะ Ticket ที่เชื่อม Defect + เลือก Assignee จาก dropdown) และ CSS `.crm-edit-*`; หัว Modal เปลี่ยนจาก "Read-only จาก CRM" เป็น "รายละเอียด Ticket จาก CRM"; ตัวกรองสถานะใช้รายการ `CRM_STATUSES` ชุดเดียวกัน
+- Mobile ≤760px: ฟอร์มเรียงแนวตั้ง select เต็มความกว้าง; ตรวจ 1280×760 และ iframe 390px (`scrollWidth` = `clientWidth`)
+
+### 2026-10-03 — CRM: แสดงรหัสพนักงานพร้อมชื่อ
+
+- ทุกจุดในหน้า CRM ที่เป็นรหัสพนักงานแสดงเป็น **"รหัส ชื่อต้น"** เช่น `6101 เหรียญทอง` ผ่าน `staffLabel`: ผู้แจ้ง (List/Board/Modal), เจ้าของเรื่อง, Assignee, ผู้ตอบในประวัติการติดต่อ (avatar ใช้ตัวอักษรจากชื่อ), CRM Username บน Hero, ข้อความ "Assign เป็น" และกล่องยืนยันส่งกลับเจ้าของเรื่อง
+- ชื่อมาจาก `GET /crm/staff` (BlueID directory, cache ฝั่ง server 1 ชม.) โหลดครั้งเดียวเมื่อบัญชี CRM พร้อมใช้งาน; รองรับค่า `ชื่อ นามสกุล (รหัส)` จาก export ของ CRM ด้วย; โหลดไม่สำเร็จหรือค่าไม่ใช่รหัสพนักงาน (เช่น รหัสสมาชิกลูกค้า) แสดงค่าเดิมโดยไม่ขึ้น error
+
+### 2026-10-03 — CRM Detail Modal: สถานะเด่นขึ้น
+
+- ป้ายสถานะในหัว Detail Modal (`.crm-ticket-head-title > .badge`) ใหญ่ขึ้น (13px/800, padding 5×12) มีจุดสีนำหน้า เส้นขอบ และพื้นสีของสถานะ 13% (`currentColor`) — เดิมกลืนกับพื้นไล่สีของหัว โดยเฉพาะสถานะ Test สีม่วง
+- `.badge.purple` ทั้งแอปเข้มขึ้น: พื้น `#f5f3ff` → `#ede9fe`, ตัวอักษร `#7c3aed` → `#6d28d9` (เดิมพื้นแทบมองไม่เห็นบนพื้นขาว/ฟ้าอ่อน)

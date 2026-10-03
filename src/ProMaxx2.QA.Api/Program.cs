@@ -1,5 +1,6 @@
 using ProMaxx2.QA.Application.Dashboard;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using ProMaxx2.QA.Application.Identity;
@@ -46,6 +47,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpClient();
 builder.Services.AddDataProtection();
@@ -63,6 +65,16 @@ builder.Services.AddScoped<TestCycleService>();
 builder.Services.AddScoped<ExecutionService>();
 builder.Services.AddScoped<AutomationCaseService>();
 builder.Services.AddScoped<AutomationSuiteService>();
+builder.Services.AddScoped<AutomationScheduleService>();
+builder.Services.AddHostedService<AutomationScheduleWorker>(); // AUT-P1-006: polls and fires due Automation Schedules
+builder.Services.AddHostedService<AutomationReaperWorker>(); // AUT-REL-002: closes executions/data jobs whose agent disappeared
+builder.Services.AddScoped<AutomationBuildTriggerService>();
+builder.Services.AddScoped<RegressionScheduleTriggerService>(); // AUT-REG-002
+builder.Services.AddScoped<AutomationWebhookService>();
+builder.Services.AddScoped<AutomationDataSnapshotService>(); // AUT-DATA-001
+builder.Services.AddScoped<AutomationDataRestoreService>(); // AUT-DATA-002
+builder.Services.AddScoped<AutomationDataSeedService>(); // AUT-DATA-003
+builder.Services.AddScoped<AutomationEnvironmentDataProfileService>(); // AUT-DATA-006
 builder.Services.AddScoped<AutomationAgentService>();
 builder.Services.AddScoped<AutomationAiService>();
 builder.Services.AddScoped<AutomationDefectService>();
@@ -75,7 +87,23 @@ builder.Services.AddScoped<TestCycleAiService>();
 builder.Services.AddScoped<DefectAutoCreateService>();
 builder.Services.AddScoped<DefectActivityService>();
 builder.Services.AddScoped<SharedAiConfigurationService>();
+builder.Services.AddMemoryCache(); // CRM ticket list cache (CrmApiClient) — 60 วินาทีต่อผู้ใช้+ตัวกรอง
+builder.Services.AddSingleton<CrmStaffDirectoryCache>(); // directory พนักงาน BlueID ใช้ร่วมทุกผู้ใช้ — cache 1 ชม.
+builder.Services.AddSingleton<CrmTokenService>(); // must outlive request scope to actually cache the ~24h BlueID token
+builder.Services.AddScoped<CrmConfigurationService>();
+builder.Services.AddScoped<CrmSyncSettingsService>();
+builder.Services.AddScoped<CrmApiClient>();
+builder.Services.AddScoped<CrmTicketDetailService>();
+builder.Services.AddScoped<CrmSendToCrmService>();
+builder.Services.AddScoped<DefectShareLinkService>();
+builder.Services.AddScoped<DefectImageStorage>();
+builder.Services.AddScoped<EmailConfigurationService>();
+builder.Services.AddScoped<EmailSenderService>();
+builder.Services.AddScoped<CrmSyncService>();
+builder.Services.AddScoped<IAuthorizationHandler, CrmViewAuthorizationHandler>();
+builder.Services.AddHostedService<CrmSyncWorker>(); // Phase 2: polls Linked Defects every 2min for CRM status/assignto changes
 builder.Services.AddScoped<ProjectAccessContext>();
+builder.Services.AddScoped<ProjectScopeGuard>();
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? throw new InvalidOperationException("Missing Jwt configuration.");
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "";
 if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32) throw new InvalidOperationException("Jwt:Key must contain at least 32 bytes. Set it via an environment variable or secret store — do not commit a signing key.");
@@ -92,14 +120,39 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("RequirementEdit",p=>p.RequireClaim("permission","REQUIREMENT.EDIT"))
     .AddPolicy("TestCaseView",p=>p.RequireClaim("permission","TESTCASE.VIEW"))
     .AddPolicy("TestCaseEdit",p=>p.RequireClaim("permission","TESTCASE.EDIT"))
+    .AddPolicy("SysAdminOnly",p=>p.RequireRole("SYS_ADMIN"))
     .AddPolicy("RegressionView",p=>p.RequireAssertion(c=>c.User.IsInRole("SYS_ADMIN")||c.User.HasClaim("permission","REGRESSION.VIEW")))
     .AddPolicy("RegressionManage",p=>p.RequireAssertion(c=>c.User.IsInRole("SYS_ADMIN")||c.User.HasClaim("permission","REGRESSION.MANAGE")))
     .AddPolicy("DefectView",p=>p.RequireClaim("permission","DEFECT.VIEW"))
     .AddPolicy("DefectEdit",p=>p.RequireClaim("permission","DEFECT.EDIT"))
+    .AddPolicy("CrmView",p=>p.AddRequirements(new CrmViewRequirement()))
+    .AddPolicy("CrmEdit",p=>p.RequireClaim("permission","CRM.EDIT"))
     .AddPolicy("ExecutionRun",p=>p.RequireClaim("permission","EXECUTION.RUN"))
+    .AddPolicy("QaWorkloadView",p=>p.RequireClaim("permission","QA.WORKLOAD.VIEW"))
+    .AddPolicy("QaMyWorkView",p=>p.RequireClaim("permission","QA.MYWORK.VIEW"))
+    .AddPolicy("QaMyWorkExecute",p=>p.RequireClaim("permission","QA.MYWORK.EXECUTE"))
+    .AddPolicy("QaAssignmentCreate",p=>p.RequireClaim("permission","QA.ASSIGN.CREATE"))
+    .AddPolicy("QaAssignmentReassign",p=>p.RequireClaim("permission","QA.ASSIGN.REASSIGN"))
+    .AddPolicy("QaAssignmentAuto",p=>p.RequireClaim("permission","QA.ASSIGN.AUTO"))
     .AddPolicy("RiskApprove",p=>p.RequireClaim("permission","RISK.APPROVE"))
     .AddPolicy("ReleaseSignoff",p=>p.RequireClaim("permission","RELEASE.SIGNOFF"))
-    .AddAutomationPolicies();
+    .AddPolicy("AuditView",p=>p.RequireAssertion(c=>c.User.IsInRole("SYS_ADMIN")||c.User.HasClaim("permission","AUDIT.VIEW")))
+    .AddAutomationPolicies()
+    // endpoint ที่ลืมใส่ [Authorize] ต้องไม่กลายเป็น public โดยปริยาย — endpoint anonymous ต้องประกาศ [AllowAnonymous] เอง
+    .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+// จำกัดความถี่ endpoint anonymous ที่เดารหัสได้ — key ตาม IP จริงของ client (หลัง Cloudflare ใช้ CF-Connecting-IP)
+static string ClientKey(HttpContext http) => http.Request.Headers["CF-Connecting-IP"].FirstOrDefault() ?? http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", http => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(ClientKey(http),
+        _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddPolicy("webhook", http => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(ClientKey(http),
+        _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    // ลิงก์แชร์ Defect (anonymous) — เปิดหน้าหนึ่งครั้งยิง 1 + จำนวนรูป (รูป Defect ≤5 + รูปคอมเมนต์ ≤5/คอมเมนต์) คำขอ
+    options.AddPolicy("share", http => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(ClientKey(http),
+        _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions { PermitLimit = 300, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
 if (allowedOrigins == null || allowedOrigins.Length == 0)
 {
@@ -114,11 +167,13 @@ app.UseExceptionHandler();
 app.Use(async (context, next) =>
 {
     context.Response.Headers["X-Trace-Id"] = context.TraceIdentifier;
+    // Defect attachment/evidence ถูกเสิร์ฟแบบ inline — ห้าม browser เดา content-type เองจากเนื้อไฟล์
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     await next();
 });
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
@@ -130,7 +185,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapHealthChecks("/health");
+app.UseRateLimiter();
+app.MapHealthChecks("/health").AllowAnonymous();
 app.MapControllers();
 if (builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
     await app.Services.InitializeDatabaseAsync(builder.Configuration["Seed:AdminPassword"]);
